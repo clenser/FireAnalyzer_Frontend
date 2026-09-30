@@ -1,6 +1,7 @@
 import { BarChart3, LoaderCircle, TriangleAlert, RefreshCw, CornerDownRight } from 'lucide-react'
 import DetectionCard from './DetectionCard'
 import FlameCharacteristics from './FlameCharacteristics'
+import FlameZones from './FlameZones'
 import MaterialCard from './MaterialCard'
 import FireClassCard from './FireClassCard'
 import SuppressionCard from './SuppressionCard'
@@ -111,6 +112,7 @@ export default function AnalysisResults({ status, data, rawPayload, error, onRet
         <>
           <DetectionCard detection={data.detection} segmentation={data.segmentation} />
           <FlameCharacteristics color={data.color} />
+          <FlameZones color={data.color} />
           <MaterialCard material={data.material} />
           <FireClassCard
             fireClass={data.fireClass}

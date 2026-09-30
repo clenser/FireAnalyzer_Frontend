@@ -3,26 +3,28 @@ import { Card, CardHeader, DataRow, PanelNote } from './ui'
 import { rgbToCss, formatRgb, formatLab, CLUSTERING_KEYS } from '../services/normalize'
 import { formatCount } from '../utils/format'
 
-function Centroids({ centroids, noiseCount }) {
-  if (!centroids?.length) return null
+function Centroids({ centroids, noiseCount, noisePercentage }) {
+  if (!centroids?.length && !noiseCount) return null
 
   return (
     <ul className="centroids">
-      {centroids.map((centroid, index) => {
+      {centroids?.map((centroid, index) => {
         const swatch = rgbToCss(centroid.rgb)
+        const pixelCount = centroid.pixelCount ?? centroid.size
+        const percentage = centroid.percentage
         return (
-          <li className="centroid" key={centroid.index ?? index}>
+          <li className="centroid" key={centroid.clusterId ?? centroid.index ?? index}>
             <span
               className="centroid__swatch"
               style={swatch ? { background: swatch } : undefined}
               aria-hidden="true"
             />
             <span className="centroid__rgb is-mono">{formatRgb(centroid.rgb) ?? '--'}</span>
-            {centroid.size !== null ? (
+            {pixelCount !== null && pixelCount !== undefined ? (
               <span className="centroid__size is-mono">
-                {formatCount(centroid.size)} px
-                {centroid.weight !== null
-                  ? ` · ${(centroid.weight * 100).toFixed(1)}%`
+                {formatCount(pixelCount)} px
+                {percentage !== null && percentage !== undefined
+                  ? ` · ${percentage.toFixed(1)}%`
                   : ''}
               </span>
             ) : null}
@@ -33,10 +35,54 @@ function Centroids({ centroids, noiseCount }) {
         <li className="centroid centroid--noise">
           <span className="centroid__swatch centroid__swatch--noise" aria-hidden="true" />
           <span className="centroid__rgb is-mono">Noise (unassigned)</span>
-          <span className="centroid__size is-mono">{formatCount(noiseCount)} px</span>
+          <span className="centroid__size is-mono">
+            {formatCount(noiseCount)} px
+            {noisePercentage !== null && noisePercentage !== undefined
+              ? ` · ${noisePercentage.toFixed(1)}%`
+              : ''}
+          </span>
         </li>
       ) : null}
     </ul>
+  )
+}
+
+/**
+ * The Mean Flame Color: the arithmetic mean of every pixel in the segmented mask.
+ * Shown first because it is the primary measurement, and separately because it is
+ * not one of the clustering algorithms - it does not depend on the sample cap.
+ */
+function MeanFlameColor({ mean, flamePixelCount }) {
+  if (!mean) return null
+  const swatch = rgbToCss(mean.rgb)
+
+  return (
+    <div className="colorrow colorrow--mean">
+      <div className="colorrow__head">
+        <span className="colorrow__label">Mean Flame Color</span>
+        {flamePixelCount !== null && flamePixelCount !== undefined ? (
+          <span className="colorrow__method is-mono">
+            {formatCount(flamePixelCount)} px
+          </span>
+        ) : null}
+      </div>
+      <div className="colorrow__body">
+        <span
+          className="swatch"
+          style={swatch ? { background: swatch } : undefined}
+          aria-hidden={swatch ? 'true' : undefined}
+        >
+          {swatch ? null : 'n/a'}
+        </span>
+        <div className="colorrow__values">
+          <DataRow label="RGB" value={formatRgb(mean.rgb)} mono />
+          <DataRow label="LAB" value={formatLab(mean.lab)} mono />
+        </div>
+      </div>
+      <p className="colorrow__basis">
+        Arithmetic mean of every segmented flame pixel, independent of the clustering sample.
+      </p>
+    </div>
   )
 }
 
@@ -49,7 +95,9 @@ function ColorRow({ label, cluster }) {
       <div className="colorrow__head">
         <span className="colorrow__label">{label}</span>
         {cluster.clusterCount !== null ? (
-          <span className="colorrow__method is-mono">k = {cluster.clusterCount}</span>
+          <span className="colorrow__method is-mono">
+            {cluster.method === 'mean_shift' ? 'centres' : 'k'} = {cluster.clusterCount}
+          </span>
         ) : null}
       </div>
 
@@ -68,7 +116,11 @@ function ColorRow({ label, cluster }) {
         </div>
       </div>
 
-      <Centroids centroids={cluster.centroids} noiseCount={cluster.noiseCount} />
+      <Centroids
+        centroids={cluster.centroids}
+        noiseCount={cluster.noiseCount}
+        noisePercentage={cluster.noisePercentage}
+      />
 
       {cluster.clusterCount !== null || cluster.samplesUsed !== null ? (
         <p className="colorrow__meta">
@@ -77,6 +129,14 @@ function ColorRow({ label, cluster }) {
           {cluster.samplesUsed !== null
             ? `${formatCount(cluster.samplesUsed)} samples used`
             : null}
+        </p>
+      ) : null}
+
+      {/* VB-GMM only: how many components the fit configured vs. actually used. */}
+      {cluster.inactiveComponents ? (
+        <p className="colorrow__meta">
+          {cluster.componentCount ?? cluster.clusterCount} of {cluster.maxComponents} components
+          used · {cluster.inactiveComponents} below the weight threshold (inactive)
         </p>
       ) : null}
 
@@ -108,28 +168,11 @@ export default function FlameCharacteristics({ color }) {
       />
 
       <div className="colors">
+        <MeanFlameColor mean={mean} flamePixelCount={flamePixelCount} />
+
         {rows.map((row) => (
           <ColorRow key={row.key} label={row.label} cluster={row.cluster} />
         ))}
-
-        {mean ? (
-          <div className="colorrow colorrow--mean">
-            <div className="colorrow__head">
-              <span className="colorrow__label">Mean Colour</span>
-            </div>
-            <div className="colorrow__body">
-              <span
-                className="swatch"
-                style={rgbToCss(mean.rgb) ? { background: rgbToCss(mean.rgb) } : undefined}
-                aria-hidden="true"
-              />
-              <div className="colorrow__values">
-                <DataRow label="RGB" value={formatRgb(mean.rgb)} mono />
-                <DataRow label="LAB" value={formatLab(mean.lab)} mono />
-              </div>
-            </div>
-          </div>
-        ) : null}
       </div>
 
       {flamePixelCount !== null ||
@@ -157,9 +200,10 @@ export default function FlameCharacteristics({ color }) {
       ) : null}
 
       <PanelNote>
-        Each row is one clustering algorithm run on the segmented flame pixels in CIELAB, reported
-        with its own cluster centroids. Swatches are rendered from the numeric RGB values returned by
-        the model. No colour names or fuel labels are inferred.
+        The Mean Flame Color is the mean of every segmented flame pixel. The six rows below are
+        independent clustering algorithms run on those pixels in CIELAB, each with its own
+        representative colour and cluster centroids. Swatches are rendered from the numeric RGB
+        values returned by the model. No colour names or fuel labels are inferred.
       </PanelNote>
     </Card>
   )

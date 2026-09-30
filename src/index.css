@@ -1228,6 +1228,7 @@ ul {
 
 .colorrow--mean {
   background: var(--surface-2);
+  border-left: 3px solid var(--amber);
 }
 
 .colorrow__head {
@@ -1375,6 +1376,92 @@ ul {
 .centroid__size {
   margin-left: auto;
   flex-shrink: 0;
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+
+/* ============================================================
+   Flame zones (spatial depth layers)
+   ============================================================ */
+
+.zones {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.zone {
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  background: var(--bg-soft);
+}
+
+.zone__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 11px;
+}
+
+.zone__label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.zone__weight {
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  padding: 2px 7px;
+  border: 1px solid var(--cyan-line);
+  border-radius: 999px;
+  background: var(--cyan-soft);
+}
+
+.zone__body {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.zone__values {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.zone__values .drow {
+  padding: 0;
+  background: none;
+}
+
+.zone__values .drow__label {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  width: 34px;
+  flex-shrink: 0;
+}
+
+.zone__values .drow__value {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.zone__meta {
+  display: flex;
+  gap: 10px;
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border-soft);
+  font-family: var(--font-mono);
   font-size: 10.5px;
   color: var(--text-3);
 }

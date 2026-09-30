@@ -10,22 +10,58 @@
  * backend revision cannot crash the UI. Anything genuinely absent becomes `null`
  * and is simply not rendered.
  *
- * Two payload details the UI depends on:
+ * Three payload details the UI depends on:
  *  - `segmentation.mask` is a base64 PNG of the *actual* segmented flame region,
  *    at the source image's own resolution. It is a different thing from
  *    `fire_detection.bbox`, which is a detection rectangle.
+ *  - `flame_analysis.mean_flame_color` is the mean of *every* pixel in that
+ *    mask, so it is reported on its own rather than among the algorithms in
+ *    `flame_analysis.algorithms` (which are computed from the sampled pixels).
  *  - `fire_class` and `extinguishing_agents` are *derived* from the matched
  *    material, not predicted by the detection model. The UI labels them as such.
  */
 
-/** The five retained clustering algorithms, in the order the backend reports them. */
+/**
+ * The six clustering algorithms, in the order the backend reports them.
+ * `key` is the machine name used by `flame_analysis.algorithms`.
+ */
 export const CLUSTERING_KEYS = [
-  { key: 'kmeans', label: 'K-Means' },
+  { key: 'vb_gmm', label: 'VB-GMM' },
   { key: 'gmm', label: 'GMM' },
-  { key: 'bayesian_gmm', label: 'Bayesian GMM' },
+  { key: 'kmeans_pp', label: 'K-Means++' },
   { key: 'dbscan', label: 'DBSCAN' },
+  { key: 'mean_shift', label: 'Mean-Shift' },
   { key: 'agglomerative', label: 'Agglomerative' },
 ]
+
+/** Machine name -> display name, for labels the payload does not supply. */
+export const ALGORITHM_LABELS = Object.fromEntries(
+  CLUSTERING_KEYS.map(({ key, label }) => [key, label]),
+)
+
+/**
+ * The three spatial flame zones, in report order.  `key` is the machine name used
+ * by `flame_analysis.zones`; `weight` is the engineering analysis weight (0.40 /
+ * 0.35 / 0.25), which is NOT the share of pixels - that is `percentageOfMask`.
+ */
+export const ZONE_KEYS = [
+  { key: 'inner_core', label: 'Inner/Core', weight: 0.4 },
+  { key: 'middle_transition', label: 'Middle/Transition', weight: 0.35 },
+  { key: 'outer_radiative', label: 'Outer/Radiative', weight: 0.25 },
+]
+
+/**
+ * Pre-rename spellings, accepted so an older backend still renders. The backend
+ * emits `mean_color`, `kmeans` and `bayesian_gmm` aliases for the same reason.
+ */
+const ALGORITHM_ALIASES = {
+  vb_gmm: ['bayesian_gmm', 'bgmm'],
+  gmm: [],
+  kmeans_pp: ['kmeans'],
+  dbscan: [],
+  mean_shift: ['meanshift'],
+  agglomerative: ['ward'],
+}
 
 const isFiniteNumber = (v) => typeof v === 'number' && Number.isFinite(v)
 
@@ -105,10 +141,18 @@ function normaliseCentroid(raw) {
   const rgb = rgbTuple(raw.rgb)
   const lab = labTuple(raw.lab)
   if (!rgb && !lab) return null
+  const index = num(raw.cluster_id ?? raw.clusterId ?? raw.index)
+  const size = num(raw.pixel_count ?? raw.pixelCount ?? raw.size)
+  const weight = num(raw.weight)
   return {
-    index: num(raw.index),
-    size: num(raw.size),
-    weight: num(raw.weight),
+    // `clusterId`/`pixelCount`/`percentage` are the documented names; the index,
+    // size and weight aliases carry identical values.
+    index,
+    clusterId: index,
+    size,
+    pixelCount: size,
+    weight,
+    percentage: num(raw.percentage) ?? (weight !== null ? weight * 100 : null),
     rgb,
     lab,
   }
@@ -129,6 +173,8 @@ export function maskDataUrl(mask, encoding) {
 function normaliseCluster(raw) {
   if (!raw || typeof raw !== 'object') return null
   const centroidsRaw = firstArray(raw, ['centroids']) ?? []
+  const dominantRaw = firstObject(raw, ['dominant_color', 'dominantColor'])
+  const noiseCount = num(raw.noise_count ?? raw.noiseCount)
   return {
     rgb: rgbTuple(raw.rgb),
     lab: labTuple(raw.lab),
@@ -137,16 +183,32 @@ function normaliseCluster(raw) {
     samplesUsed: num(raw.samples_used ?? raw.samplesUsed),
     pixelsSampled: triState(raw.pixels_sampled ?? raw.pixelsSampled),
     dominantCluster: num(raw.dominant_cluster ?? raw.dominantCluster),
-    dominantColor: firstObject(raw, ['dominant_color', 'dominantColor'])
-      ? {
-          rgb: rgbTuple(firstObject(raw, ['dominant_color', 'dominantColor']).rgb),
-          lab: labTuple(firstObject(raw, ['dominant_color', 'dominantColor']).lab),
-        }
+    dominantColor: dominantRaw
+      ? { rgb: rgbTuple(dominantRaw.rgb), lab: labTuple(dominantRaw.lab) }
       : null,
     centroids: centroidsRaw.map(normaliseCentroid).filter(Boolean),
-    noiseCount: num(raw.noise_count ?? raw.noiseCount),
+    noiseCount,
+    noisePercentage: num(raw.noise_percentage ?? raw.noisePercentage),
+    // Mixture models only; null/0 for the algorithms that have no components.
+    componentCount: num(raw.component_count ?? raw.componentCount),
+    maxComponents: num(raw.max_components ?? raw.maxComponents),
+    inactiveComponents: num(raw.inactive_components ?? raw.inactiveComponents) ?? 0,
     representative: firstString(raw, ['representative']),
     fallback: triState(raw.fallback),
+  }
+}
+
+function normaliseZone(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const meanRaw = firstObject(raw, ['mean_color', 'meanColor'])
+  const rgb = rgbTuple(meanRaw?.rgb)
+  const lab = labTuple(meanRaw?.lab)
+  if (!rgb && !lab) return null
+  return {
+    weight: firstNumber(raw, ['weight', 'analysis_weight']),
+    pixelCount: firstNumber(raw, ['pixel_count', 'pixelCount']),
+    percentageOfMask: firstNumber(raw, ['percentage_of_mask', 'percentageOfMask']),
+    meanColor: { rgb, lab },
   }
 }
 
@@ -258,17 +320,34 @@ export function normaliseResponse(payload) {
   const timingRaw = firstObject(payload, ['timing', 'timings', 'metrics'])
 
   // Every retained algorithm, keyed so the UI can iterate in a fixed order.
+  // The current contract nests them under `algorithms`; older payloads put each
+  // one at the top level, so both shapes are accepted.
+  const algorithmsMap = firstObject(flameRaw, ['algorithms'])
   const algorithms = {}
   for (const { key, label } of CLUSTERING_KEYS) {
-    const entry = normaliseCluster(firstObject(flameRaw, [key]))
+    const source =
+      firstObject(algorithmsMap, [key]) ?? firstObject(flameRaw, [key, ...ALGORITHM_ALIASES[key]])
+    const entry = normaliseCluster(source)
     if (entry) algorithms[key] = { ...entry, label }
   }
 
   // Short aliases kept for consumers of the older shape.
-  const kmeans = algorithms.kmeans ?? null
+  const kmeans = algorithms.kmeans_pp ?? null
   const gmm = algorithms.gmm ?? null
+  const vbGmm = algorithms.vb_gmm ?? null
+  const dbscan = algorithms.dbscan ?? null
+  const meanShift = algorithms.mean_shift ?? null
+  const agglomerative = algorithms.agglomerative ?? null
 
-  const meanRaw = firstObject(flameRaw, ['mean_color', 'mean', 'average_color'])
+  // The Mean Flame Color is the mean of every pixel in the mask. It is reported
+  // separately from the algorithms and is not a cluster centroid.
+  const meanRaw = firstObject(flameRaw, [
+    'mean_flame_color',
+    'meanFlameColor',
+    'mean_color',
+    'mean',
+    'average_color',
+  ])
   const mean = meanRaw
     ? { rgb: rgbTuple(meanRaw.rgb), lab: labTuple(meanRaw.lab) }
     : null
@@ -307,11 +386,32 @@ export function normaliseResponse(payload) {
       }
     : null
 
-  const algorithmNamesRaw = firstArray(flameRaw, ['algorithms'])
+  // The ordered display names live in `algorithm_names`; a payload that still
+  // ships `algorithms` as a string array is accepted too.
+  const algorithmNamesRaw =
+    firstArray(flameRaw, ['algorithm_names', 'algorithmNames']) ??
+    (Array.isArray(flameRaw?.algorithms) ? flameRaw.algorithms : null)
+
+  // The spatial flame zones.  Only the per-zone summary is kept for the UI; the
+  // full per-zone algorithm output stays in the raw payload for the API consumers
+  // that want it.  A missing or malformed zone is dropped, never crashed on.
+  const zonesRaw = firstObject(flameRaw, ['zones'])
+  const zones = {}
+  if (zonesRaw && typeof zonesRaw === 'object') {
+    for (const { key } of ZONE_KEYS) {
+      const entry = normaliseZone(zonesRaw[key])
+      if (entry) zones[key] = entry
+    }
+  }
+
   const color = flameRaw
     ? {
         kmeans,
         gmm,
+        vbGmm,
+        dbscan,
+        meanShift,
+        agglomerative,
         algorithms,
         algorithmNames:
           algorithmNamesRaw?.filter((name) => typeof name === 'string' && name.trim()) ?? null,
@@ -321,6 +421,8 @@ export function normaliseResponse(payload) {
         samplesUsed: firstNumber(flameRaw, ['samples_used', 'samplesUsed']),
         pixelsSampled: triState(flameRaw.pixels_sampled ?? flameRaw.pixelsSampled),
         skippedReason: firstString(flameRaw, ['skipped_reason', 'skippedReason']),
+        zones,
+        zoneFallback: triState(flameRaw.zone_fallback ?? flameRaw.zoneFallback),
       }
     : null
 
@@ -352,9 +454,25 @@ export function normaliseResponse(payload) {
   }
 }
 
+/**
+ * A tuple is only usable if it has three finite channels. `rgbTuple` already
+ * enforces this on the way in, but these are exported and also called on
+ * hand-built objects, so a short tuple must not become "rgb(1, 2, undefined)".
+ */
+const isTriple = (value) => rgbTuple(value) !== null
+
 export const formatLab = (lab) =>
-  lab ? `L ${formatChannel(lab[0], 1)} · a ${formatChannel(lab[1], 1)} · b ${formatChannel(lab[2], 1)}` : null
+  isTriple(lab)
+    ? `L ${formatChannel(lab[0], 1)} · a ${formatChannel(lab[1], 1)} · b ${formatChannel(lab[2], 1)}`
+    : null
 
-export const formatRgb = (rgb) => (rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : null)
+export const formatRgb = (rgb) => {
+  const triple = rgbTuple(rgb)
+  return triple ? `rgb(${triple.join(', ')})` : null
+}
 
-export const rgbToCss = (rgb) => (rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : null)
+/** A CSS colour for a swatch background, or null so the caller can omit the style. */
+export const rgbToCss = (rgb) => {
+  const triple = rgbTuple(rgb)
+  return triple ? `rgb(${triple.join(', ')})` : null
+}
