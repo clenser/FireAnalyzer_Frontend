@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../config'
+import { getApiUrl } from './connectionManager'
 import { normaliseResponse } from './normalize'
 
 export class ApiError extends Error {
@@ -15,10 +15,11 @@ const NETWORK_MESSAGE = 'Could not reach the analysis service. Check your connec
 const GENERIC_MESSAGE = 'The analysis service could not process this request.'
 
 function endpoint(path) {
-  if (!API_BASE_URL) {
-    throw new ApiError('VITE_API_URL is not configured for this build.', { code: 'NO_API_URL' })
+  const baseUrl = getApiUrl()
+  if (!baseUrl) {
+    throw new ApiError('Analysis server is not ready yet.', { code: 'NOT_READY' })
   }
-  return `${API_BASE_URL}${path}`
+  return `${baseUrl}${path}`
 }
 
 /**

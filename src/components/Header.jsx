@@ -1,6 +1,10 @@
 import { Flame, Cpu } from 'lucide-react'
 
 const STATE_LABEL = {
+  starting: 'Starting analysis server...',
+  connecting: 'Connecting to analysis server...',
+  ready: 'API Online',
+  unavailable: 'API Unavailable',
   checking: 'Checking API',
   online: 'API Online',
   offline: 'API Offline',
@@ -10,8 +14,8 @@ function StatusDot({ state }) {
   return <span className={`status-dot status-dot--${state}`} aria-hidden="true" />
 }
 
-export default function Header({ health }) {
-  const state = health?.state ?? 'checking'
+export default function Header({ connectionState, health }) {
+  const state = connectionState ?? 'starting'
   const label = STATE_LABEL[state] ?? STATE_LABEL.checking
 
   return (

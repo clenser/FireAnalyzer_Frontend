@@ -273,6 +273,26 @@ ul {
   animation: pulse-dot 1.4s ease-in-out infinite;
 }
 
+.status-dot--starting {
+  background: var(--amber);
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+.status-dot--connecting {
+  background: var(--amber);
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+.status-dot--ready {
+  background: var(--green);
+  box-shadow: 0 0 0 3px var(--green-soft);
+}
+
+.status-dot--unavailable {
+  background: var(--red);
+  box-shadow: 0 0 0 3px var(--red-soft);
+}
+
 @keyframes pulse-dot {
   0%,
   100% {

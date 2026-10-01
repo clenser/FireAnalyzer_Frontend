@@ -4,6 +4,7 @@ import UploadPanel from './components/UploadPanel'
 import AnalysisResults from './components/AnalysisResults'
 import { Card } from './components/ui'
 import { analyzeImage, checkHealth } from './services/api'
+import { connect, disconnect, subscribeToState } from './services/connectionManager'
 import { validateImageFile } from './utils/validateFile'
 
 const STATUS = {
@@ -42,32 +43,46 @@ export default function App() {
   const [rawPayload, setRawPayload] = useState(null)
   const [error, setError] = useState(null)
 
+  const [connectionState, setConnectionState] = useState('starting')
   const [health, setHealth] = useState({ state: 'checking' })
 
   const previewRef = useRef(null)
   const analysisAbort = useRef(null)
+  const prevConnectionStateRef = useRef('starting')
 
-  /* ---------------- API health ---------------- */
+  /* ---------------- Connection manager ---------------- */
 
   useEffect(() => {
-    const controller = new AbortController()
-    let cancelled = false
+    const unsubscribe = subscribeToState((newState) => {
+      const prev = prevConnectionStateRef.current
+      prevConnectionStateRef.current = newState
+      setConnectionState(newState)
 
-    checkHealth({ signal: controller.signal })
-      .then((result) => {
-        if (cancelled) return
-        setHealth({
-          state: result.status === 'ok' ? 'online' : 'offline',
-          device: result.device,
-        })
-      })
-      .catch((err) => {
-        if (!cancelled && err?.name !== 'AbortError') setHealth({ state: 'offline' })
-      })
+      if (newState === 'ready' && prev !== 'ready') {
+        checkHealth()
+          .then((result) => {
+            setHealth({
+              state: result.status === 'ok' ? 'online' : 'offline',
+              device: result.device,
+            })
+          })
+          .catch(() => {
+            setHealth({ state: 'offline' })
+          })
+      } else if (newState === 'unavailable') {
+        setHealth({ state: 'offline' })
+      }
+    })
+
+    connect()
+
+    const handleBeforeUnload = () => disconnect()
+    window.addEventListener('beforeunload', handleBeforeUnload)
 
     return () => {
-      cancelled = true
-      controller.abort()
+      unsubscribe()
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      disconnect()
     }
   }, [])
 
@@ -165,7 +180,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <Header health={health} />
+      <Header connectionState={connectionState} health={health} />
 
       <main className="shell">
         <section className="hero">
@@ -186,6 +201,7 @@ export default function App() {
               onClear={clearSelection}
               onAnalyze={runAnalysis}
               isAnalyzing={isAnalyzing}
+              connectionReady={connectionState === 'ready'}
               validationError={validationError}
               showOverlay={status === STATUS.success}
               boundingBox={data?.detection?.boundingBox ?? null}

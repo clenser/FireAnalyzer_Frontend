@@ -13,6 +13,7 @@ export default function UploadPanel({
   onClear,
   onAnalyze,
   isAnalyzing,
+  connectionReady,
   showOverlay,
   boundingBox,
   segmentation,
@@ -120,7 +121,7 @@ export default function UploadPanel({
             type="button"
             className="btn btn--primary btn--block"
             onClick={onAnalyze}
-            disabled={isAnalyzing}
+            disabled={isAnalyzing || !connectionReady}
           >
             {isAnalyzing ? (
               <>
