@@ -2,7 +2,11 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { AI_VISIBILITY_THRESHOLD_PERCENT } from '../src/config.js'
-import { normaliseResponse } from '../src/services/normalize.js'
+import {
+  normaliseAiMaterialAnalysis,
+  normaliseMaterialIdentification,
+  normaliseResponse,
+} from '../src/services/normalize.js'
 import { buildAiModel, buildImageResultModel, buildVideoResultModel } from '../src/services/viewModel.js'
 
 /**
@@ -162,4 +166,48 @@ test('a confidence below the threshold never renders an "uncertain" note', () =>
   const shown = videoModel(videoAi(60))
   assert.equal(shown.ai.available, true)
   assert.equal('uncertain' in shown.ai, false)
+})
+
+test('the real weak-evidence answer from the live endpoint is hidden, not guessed at', () => {
+  // Captured verbatim from the deployed `/video-material-analysis` when the frame
+  // evidence is ambiguous. Gemini declines to name a primary material, ranks five
+  // candidates at 25% and below, and flags the assessment as uncertain. The card
+  // must disappear - the app must not promote the 25% candidate to an answer, and
+  // must certainly not invent a primary material the model refused to give.
+  const live = buildVideoResultModel({
+    aggregation: {
+      frames: [],
+      framesAnalyzed: 5,
+      framesSucceeded: 5,
+      framesWithFlame: 5,
+      failedCount: 0,
+      reliable: true,
+      rgb: [202, 114, 32],
+      lab: [60.3, 24, 55],
+    },
+    materialIdentification: normaliseMaterialIdentification({
+      material_analysis: { primary_material: 'Chemical Products', similarity: 0.9034 },
+      fire_class: { class: 'Class B' },
+    }),
+    videoAi: normaliseAiMaterialAnalysis({
+      available: true,
+      primary_material: null,
+      matches: [
+        { rank: 1, material: 'Wood Materials', confidence_percent: 25, reason: 'colour alone is insufficient' },
+        { rank: 2, material: 'Paper Products(Wood material)', confidence_percent: 22, reason: 'overlaps' },
+        { rank: 3, material: 'Natural Fibers', confidence_percent: 18, reason: 'broad similarities' },
+      ],
+      overall_confidence_level: 'low',
+      uncertain: true,
+      evidence_quality: 'limited',
+      frames_supplied: 5,
+      frames_analyzed: 5,
+      display_threshold_percent: 45,
+    }),
+  })
+
+  assert.equal(live.ai, null, 'a 25% top match is far below the 45% gate')
+  assert.equal(live.material.name, 'Chemical Products', 'the deterministic material still stands')
+  assert.equal(live.fireClass.name, 'Class B')
+  assert.equal(live.hasContent, true)
 })
