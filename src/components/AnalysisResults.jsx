@@ -3,6 +3,7 @@ import DetectionCard from './DetectionCard'
 import FlameCharacteristics from './FlameCharacteristics'
 import FlameZones from './FlameZones'
 import MaterialCard from './MaterialCard'
+import AiMaterialAnalysis from './AiMaterialAnalysis'
 import FireClassCard from './FireClassCard'
 import SuppressionCard from './SuppressionCard'
 import ProcessingMetrics from './ProcessingMetrics'
@@ -99,7 +100,10 @@ export default function AnalysisResults({ status, data, rawPayload, error, onRet
     data.material ||
     data.suppression ||
     data.fireClass ||
-    data.agents?.length
+    data.agents?.length ||
+    // An unavailable Gemini section is a status, not analysable content, so the
+    // "no analysable fields" branch stays reachable for an empty payload.
+    data.aiMaterialAnalysis?.available === true
 
   // The agents are shown once, with their mechanism, on the fire-class card. The
   // older suppression card only stands in when that card has nothing to show,
@@ -114,6 +118,7 @@ export default function AnalysisResults({ status, data, rawPayload, error, onRet
           <FlameCharacteristics color={data.color} />
           <FlameZones color={data.color} />
           <MaterialCard material={data.material} />
+          <AiMaterialAnalysis aiMaterialAnalysis={data.aiMaterialAnalysis} />
           <FireClassCard
             fireClass={data.fireClass}
             agents={data.agents}

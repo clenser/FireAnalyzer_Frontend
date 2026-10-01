@@ -8,6 +8,7 @@ import {
   formatLab,
   formatRgb,
   maskDataUrl,
+  normaliseAiMaterialAnalysis,
   normaliseResponse,
   rgbToCss,
 } from '../src/services/normalize.js'
@@ -409,4 +410,265 @@ test('the six algorithms and Mean-Shift are still present alongside zones', () =
   assert.equal(color.algorithmNames.includes('Mean-Shift'), true)
   // Zones do not disturb the whole-mask contract.
   assert.equal(color.mean.rgb.join(','), MEAN.rgb.join(','))
+})
+
+// ---------------------------------------------------------------------------
+// AI material analysis (Gemini) — a second, independent result
+// ---------------------------------------------------------------------------
+
+const AI_REASONING =
+  'The measured flame color is compatible with several ordinary organic materials.'
+
+const AI_MATCHES = [
+  {
+    rank: 1,
+    material: 'Paper Products(Wood material)',
+    confidence_percent: 30.0,
+    reason: 'Cellulose-based fuel with a similar emission spectrum.',
+  },
+  {
+    rank: 2,
+    material: 'Wood Materials',
+    confidence_percent: 25.0,
+    reason: 'Lignocellulosic composition close to the observed flame.',
+  },
+  {
+    rank: 3,
+    material: 'Organic Waste',
+    confidence_percent: 20.0,
+    reason: 'Mixed organic matter burns with a comparable color profile.',
+  },
+  {
+    rank: 4,
+    material: 'Natural Fibers',
+    confidence_percent: 15.0,
+    reason: 'Fiber structure produces a similar soot radiation pattern.',
+  },
+  {
+    rank: 5,
+    material: 'Wax Materials',
+    confidence_percent: 10.0,
+    reason: 'Hydrocarbon-rich fuel with a somewhat cooler flame.',
+  },
+]
+
+function aiPayload(overrides = {}) {
+  return {
+    available: true,
+    primary_material: 'Paper Products(Wood material)',
+    matches: AI_MATCHES,
+    overall_confidence_level: 'low',
+    uncertain: true,
+    reasoning_summary: AI_REASONING,
+    ...overrides,
+  }
+}
+
+function fullPayload() {
+  return {
+    ...payload(),
+    material_analysis: { primary_material: 'Natural Fibers', similarity: 0.9268 },
+    ai_material_analysis: aiPayload(),
+  }
+}
+
+/** Fails if any value anywhere in the tree is `undefined` (null is fine). */
+function assertNoUndefined(value, path = 'root') {
+  if (value === undefined) throw new Error(`undefined value at ${path}`)
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => assertNoUndefined(entry, `${path}[${index}]`))
+  } else if (value && typeof value === 'object') {
+    for (const [key, entry] of Object.entries(value)) {
+      assertNoUndefined(entry, `${path}.${key}`)
+    }
+  }
+}
+
+test('a normal Gemini response is normalised into the stable frontend shape', () => {
+  const result = normaliseAiMaterialAnalysis(aiPayload())
+  assert.equal(result.available, true)
+  assert.equal(result.primaryMaterial, 'Paper Products(Wood material)')
+  assert.equal(result.overallConfidenceLevel, 'low')
+  assert.equal(result.uncertain, true)
+  assert.equal(result.reasoningSummary, AI_REASONING)
+  assert.equal(result.error, null)
+  assert.equal(result.matches.length, 5)
+})
+
+test('exactly five matches are kept with ranks ordered 1-5', () => {
+  const result = normaliseAiMaterialAnalysis(aiPayload())
+  assert.equal(result.matches.length, 5)
+  assert.deepEqual(
+    result.matches.map((match) => match.rank),
+    [1, 2, 3, 4, 5],
+  )
+  assert.deepEqual(
+    result.matches.map((match) => match.material),
+    [
+      'Paper Products(Wood material)',
+      'Wood Materials',
+      'Organic Waste',
+      'Natural Fibers',
+      'Wax Materials',
+    ],
+  )
+})
+
+test('confidence percentages are preserved as numbers', () => {
+  const result = normaliseAiMaterialAnalysis(aiPayload())
+  assert.deepEqual(
+    result.matches.map((match) => match.confidencePercent),
+    [30, 25, 20, 15, 10],
+  )
+  for (const match of result.matches) {
+    assert.equal(typeof match.confidencePercent, 'number')
+    assert.ok(Number.isFinite(match.confidencePercent))
+  }
+})
+
+test('matches are sorted by rank even when the backend sends them out of order', () => {
+  const shuffled = [AI_MATCHES[3], AI_MATCHES[0], AI_MATCHES[4], AI_MATCHES[1], AI_MATCHES[2]]
+  const result = normaliseAiMaterialAnalysis(aiPayload({ matches: shuffled }))
+  assert.deepEqual(
+    result.matches.map((match) => match.rank),
+    [1, 2, 3, 4, 5],
+  )
+})
+
+test('more than five matches are truncated to the top five', () => {
+  const six = [...AI_MATCHES, { rank: 6, material: 'Other', confidence_percent: 5.0, reason: '' }]
+  const result = normaliseAiMaterialAnalysis(aiPayload({ matches: six }))
+  assert.equal(result.matches.length, 5)
+  assert.equal(result.matches[4].rank, 5)
+})
+
+test('uncertain=true is surfaced as a boolean flag', () => {
+  const result = normaliseAiMaterialAnalysis(aiPayload({ uncertain: true }))
+  assert.equal(result.uncertain, true)
+  const certain = normaliseAiMaterialAnalysis(aiPayload({ uncertain: false }))
+  assert.equal(certain.uncertain, false)
+})
+
+test('available=false keeps the error and never fabricates matches', () => {
+  const result = normaliseAiMaterialAnalysis({ available: false, error: 'Gemini timed out.' })
+  assert.equal(result.available, false)
+  assert.equal(result.error, 'Gemini timed out.')
+  assert.deepEqual(result.matches, [])
+  assert.equal(result.primaryMaterial, null)
+  assert.equal(result.overallConfidenceLevel, null)
+  assert.equal(result.uncertain, null)
+  assert.equal(result.reasoningSummary, null)
+})
+
+test('missing ai_material_analysis normalises to a safe unavailable shape', () => {
+  const result = normaliseResponse(payload())
+  assert.equal(result.aiMaterialAnalysis.available, false)
+  assert.deepEqual(result.aiMaterialAnalysis.matches, [])
+  assert.equal(result.aiMaterialAnalysis.primaryMaterial, null)
+  assert.equal(result.aiMaterialAnalysis.error, null)
+})
+
+test('null ai_material_analysis does not throw', () => {
+  const result = normaliseResponse({ ...payload(), ai_material_analysis: null })
+  assert.equal(result.aiMaterialAnalysis.available, false)
+  assert.deepEqual(result.aiMaterialAnalysis.matches, [])
+})
+
+test('malformed matches are dropped without crashing', () => {
+  const result = normaliseAiMaterialAnalysis(
+    aiPayload({
+      matches: [
+        null,
+        42,
+        'nope',
+        { rank: 1 },
+        { material: 'No Rank' },
+        { rank: 2, material: 'Valid Match', confidence_percent: 12.5, reason: 'ok' },
+      ],
+    }),
+  )
+  assert.equal(result.matches.length, 1)
+  assert.equal(result.matches[0].material, 'Valid Match')
+  assert.equal(result.matches[0].rank, 2)
+})
+
+test('invalid confidence becomes null, never NaN or undefined', () => {
+  const result = normaliseAiMaterialAnalysis(
+    aiPayload({
+      matches: [{ rank: 1, material: 'X', confidence_percent: 'high' }],
+    }),
+  )
+  assert.equal(result.matches[0].confidencePercent, null)
+  const missing = normaliseAiMaterialAnalysis(
+    aiPayload({
+      matches: [{ rank: 1, material: 'X' }],
+    }),
+  )
+  assert.equal(missing.matches[0].confidencePercent, null)
+})
+
+test('invalid rank drops the match entirely', () => {
+  const result = normaliseAiMaterialAnalysis(
+    aiPayload({
+      matches: [{ rank: 'one', material: 'X', confidence_percent: 10 }],
+    }),
+  )
+  assert.deepEqual(result.matches, [])
+})
+
+test('missing reason becomes null rather than undefined', () => {
+  const result = normaliseAiMaterialAnalysis(
+    aiPayload({
+      matches: [{ rank: 1, material: 'X', confidence_percent: 10 }],
+    }),
+  )
+  assert.equal(result.matches[0].reason, null)
+})
+
+test('the deterministic material result is unchanged by Gemini data', () => {
+  const result = normaliseResponse(fullPayload())
+  assert.equal(result.material.name, 'Natural Fibers')
+  assert.equal(result.material.similarity, 0.9268)
+  assert.deepEqual(result.material.alternatives, [])
+  // The deterministic card never absorbs Gemini fields.
+  assert.equal(result.material.databaseNotes, null)
+  assert.equal(result.material.scoreBasis, null)
+})
+
+test('both deterministic and Gemini results normalise from the same API payload', () => {
+  const result = normaliseResponse(fullPayload())
+  // Deterministic side.
+  assert.equal(result.material.name, 'Natural Fibers')
+  assert.equal(result.material.similarity, 0.9268)
+  // Gemini side, independently.
+  assert.equal(result.aiMaterialAnalysis.available, true)
+  assert.equal(result.aiMaterialAnalysis.primaryMaterial, 'Paper Products(Wood material)')
+  assert.equal(result.aiMaterialAnalysis.matches.length, 5)
+  assert.equal(result.aiMaterialAnalysis.overallConfidenceLevel, 'low')
+  assert.equal(result.aiMaterialAnalysis.uncertain, true)
+  assert.equal(result.aiMaterialAnalysis.reasoningSummary, AI_REASONING)
+})
+
+test('normalised AI output never contains undefined values', () => {
+  const inputs = [
+    undefined,
+    null,
+    42,
+    'nope',
+    [],
+    {},
+    { available: true },
+    { available: false },
+    { available: false, error: 'boom' },
+    aiPayload(),
+    aiPayload({ matches: [null, { rank: 1 }, { material: 'X' }, { rank: 'x', material: 'Y' }] }),
+    aiPayload({ matches: 'not-an-array' }),
+    aiPayload({ overall_confidence_level: 7, uncertain: 'yes' }),
+  ]
+  for (const input of inputs) {
+    assertNoUndefined(normaliseAiMaterialAnalysis(input))
+  }
+  // The same guarantee holds for the whole /analyze payload.
+  assertNoUndefined(normaliseResponse(fullPayload()))
+  assertNoUndefined(normaliseResponse(null))
 })

@@ -1670,6 +1670,167 @@ ul {
 }
 
 /* ============================================================
+   AI material analysis (Gemini) — a second, independent result
+   ============================================================ */
+
+.ai-material-card {
+  border-color: var(--cyan-line);
+  background: linear-gradient(180deg, rgba(53, 200, 221, 0.045), transparent 45%), var(--surface);
+}
+
+.ai-material-card .card__header-main {
+  color: var(--cyan);
+}
+
+.ai-uncertain {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 12px;
+  padding: 8px 11px;
+  border: 1px solid var(--amber-line);
+  border-radius: var(--r-md);
+  background: var(--amber-soft);
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--amber-bright);
+}
+
+.ai-primary {
+  padding: 15px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  background: var(--bg-soft);
+}
+
+.ai-primary__name {
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-bottom: 5px;
+}
+
+.ai-primary__conf {
+  font-size: 13px;
+  color: var(--cyan);
+  margin-bottom: 12px;
+}
+
+.ai-primary__conf span {
+  font-family: var(--font-ui);
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.ai-level {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--text-3);
+}
+
+.ai-matches {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--border-soft);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.ai-match {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 12px;
+  background: var(--bg-soft);
+}
+
+.ai-match__rank {
+  font-size: 10.5px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.ai-match__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-match__conf {
+  font-size: 12.5px;
+  color: var(--cyan);
+  flex-shrink: 0;
+}
+
+.ai-reasoning {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  background: var(--bg-soft);
+}
+
+.ai-reasoning__title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 6px;
+}
+
+.ai-reasoning__text {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+
+.ai-unavailable {
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  background: var(--bg-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ai-unavailable__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.ai-unavailable__error {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+
+.ai-unavailable__note {
+  font-size: 11.5px;
+  color: var(--text-3);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 8px;
+  margin-top: 2px;
+}
+
+/* ============================================================
    Suppression
    ============================================================ */
 

@@ -3,8 +3,8 @@
  *
  * The live backend returns:
  *   fire_detection, segmentation, flame_analysis,
- *   material_analysis, suppression_information, fire_class,
- *   extinguishing_agents, timing, error
+ *   material_analysis, ai_material_analysis, suppression_information,
+ *   fire_class, extinguishing_agents, timing, error
  *
  * Field accessors below accept the documented/alternate names as fallbacks so a
  * backend revision cannot crash the UI. Anything genuinely absent becomes `null`
@@ -237,6 +237,64 @@ function normaliseMaterial(raw) {
   }
 }
 
+/**
+ * Normalises the optional Gemini `ai_material_analysis` section.
+ *
+ * Gemini is a second, independent opinion and never feeds back into the
+ * deterministic `material_analysis`, so this normalizer is deliberately
+ * self-contained: anything missing or malformed becomes null/empty and the UI
+ * degrades to its "unavailable" state instead of crashing.
+ */
+export function normaliseAiMaterialAnalysis(raw) {
+  const unavailable = {
+    available: false,
+    primaryMaterial: null,
+    matches: [],
+    overallConfidenceLevel: null,
+    uncertain: null,
+    reasoningSummary: null,
+    error: null,
+  }
+
+  if (!raw || typeof raw !== 'object') return { ...unavailable }
+
+  const available = raw.available === true
+
+  const matchesRaw = firstArray(raw, ['matches']) ?? []
+  const matches = matchesRaw
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null
+      const rank = num(entry.rank)
+      const material = firstString(entry, ['material', 'name'])
+      // A match without a usable rank or material name cannot be rendered, so it
+      // is dropped rather than surfaced as "undefined".
+      if (rank === null || !material) return null
+      return {
+        rank,
+        material,
+        confidencePercent: num(entry.confidence_percent ?? entry.confidencePercent),
+        reason: firstString(entry, ['reason']),
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.rank - b.rank)
+    .slice(0, 5)
+
+  return {
+    available,
+    primaryMaterial: firstString(raw, ['primary_material', 'primaryMaterial']),
+    matches,
+    overallConfidenceLevel: firstString(raw, [
+      'overall_confidence_level',
+      'overallConfidenceLevel',
+    ]),
+    uncertain: triState(raw.uncertain),
+    reasoningSummary: firstString(raw, ['reasoning_summary', 'reasoningSummary']),
+    // Only an unavailable response carries an error; a successful one never does.
+    error: available ? null : firstString(raw, ['error']),
+  }
+}
+
 function normaliseFireClass(raw) {
   if (!raw || typeof raw !== 'object') return null
   const name = firstString(raw, ['class', 'fire_class', 'className'])
@@ -307,6 +365,7 @@ export function normaliseResponse(payload) {
       segmentation: null,
       color: null,
       material: null,
+      aiMaterialAnalysis: normaliseAiMaterialAnalysis(null),
       suppression: null,
       fireClass: null,
       agents: [],
@@ -445,6 +504,11 @@ export function normaliseResponse(payload) {
     segmentation,
     color,
     material: normaliseMaterial(firstObject(payload, ['material_analysis', 'material'])),
+    // Gemini is an independent second opinion; it never feeds back into the
+    // deterministic material result above.
+    aiMaterialAnalysis: normaliseAiMaterialAnalysis(
+      firstObject(payload, ['ai_material_analysis', 'aiMaterialAnalysis']),
+    ),
     suppression: normaliseSuppression(
       firstObject(payload, ['suppression_information', 'suppression']),
     ),
