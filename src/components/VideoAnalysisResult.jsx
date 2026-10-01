@@ -12,17 +12,22 @@ import FireClassCard from './FireClassCard'
 import SuppressionCard, { DurationNote } from './SuppressionCard'
 
 /**
- * The video dashboard, in result order:
+ * The video dashboard, in the one fixed result order:
  *
  *   analyzed frames -> video summary -> flame detection + average flame colour
  *   -> material identification -> AI material analysis (only when confident)
  *   -> fire class -> processing complete
  *
- * Grid placement is declared in CSS per breakpoint, so the DOM keeps this order
- * on every screen while desktop can pair cards. Every card is rendered at its
- * natural height, and a card whose data is absent - the AI card below the
- * confidence threshold, the material card when the deterministic endpoint could
- * not answer - is omitted rather than padded out.
+ * The DOM follows that order on every screen and each card states the grid
+ * columns it occupies (`.area-*`), so placement is deterministic rather than
+ * left to auto-placement: full width, full width, a half-width pair, then full
+ * width for everything that follows. A pair card whose partner the data did not
+ * produce is marked `is-solo` and takes the whole row instead of leaving half of
+ * it blank.
+ *
+ * Every card renders at its natural height, and a card the data cannot justify -
+ * the AI card below the confidence threshold, the material card when the
+ * deterministic endpoint could not answer - is omitted rather than padded out.
  */
 export default function VideoAnalysisResult({ result, durationMs }) {
   const model = useMemo(
@@ -44,12 +49,15 @@ export default function VideoAnalysisResult({ result, durationMs }) {
     return <p className="results__none">No analysis results were returned for this video.</p>
   }
 
+  const detectionClass = model.flameColor ? 'area-detection' : 'area-detection is-solo'
+  const colorClass = model.detection ? 'area-color' : 'area-color is-solo'
+
   return (
     <div className="result-grid result-grid--video">
       <AnalyzedFrameGallery frames={model.gallery} className="area-gallery" />
       <VideoSummaryCard summary={model.summary} className="area-summary" />
-      <DetectionCard detection={model.detection} className="area-detection" />
-      <FlameColorCard color={model.flameColor} className="area-color" />
+      <DetectionCard detection={model.detection} className={detectionClass} />
+      <FlameColorCard color={model.flameColor} className={colorClass} />
       <MaterialCard
         material={model.material}
         unavailable={model.summary.materialUnavailable}
@@ -63,7 +71,7 @@ export default function VideoAnalysisResult({ result, durationMs }) {
       ) : null}
 
       {model.duration ? (
-        <Card className="result-card statusbar area-status" aria-label="Analysis status">
+        <Card className="statusbar area-status" aria-label="Analysis status">
           <DurationNote duration={model.duration} />
         </Card>
       ) : null}

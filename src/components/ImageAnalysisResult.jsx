@@ -10,13 +10,22 @@ import FireClassCard from './FireClassCard'
 import SuppressionCard, { DurationNote } from './SuppressionCard'
 
 /**
- * The image dashboard: one screen, not a column of cards.
+ * The image dashboard, in the one fixed result order:
  *
- * Grid areas are declared in CSS per breakpoint, so the DOM stays in result
- * priority order (detection, flame visual, fire class, material, colour, AI)
- * while desktop can place the picture and detection side by side. Cards render at
- * their natural height and the AI card is absent unless its confidence clears the
- * display threshold.
+ *   analyzed image + flame detection -> mean flame colour + material
+ *   identification -> AI material analysis (only when confident) -> fire class
+ *   -> processing complete
+ *
+ * One grid, not a tall column of cards. The DOM follows the order above on every
+ * screen and each card states the grid columns it occupies (`.area-*`): the
+ * analyzed picture takes the wider half of the first row with detection beside
+ * it, the mean colour and material pair repeat that same column boundary, and
+ * everything after them is full width. A card whose partner the data did not
+ * produce is marked `is-solo` and takes the whole row rather than leaving half
+ * of it blank.
+ *
+ * Every card renders at its natural height, and the AI card is absent unless its
+ * confidence clears the display threshold.
  */
 export default function ImageAnalysisResult({ data, previewUrl, dimensions, durationMs }) {
   const model = useMemo(
@@ -28,20 +37,25 @@ export default function ImageAnalysisResult({ data, previewUrl, dimensions, dura
     return <p className="results__none">No analysis results were returned for this image.</p>
   }
 
+  const imageClass = model.detection ? 'area-image' : 'area-image is-solo'
+  const detectionClass = model.flameImage?.src ? 'area-detection' : 'area-detection is-solo'
+  const colorClass = model.material ? 'area-color' : 'area-color is-solo'
+  const materialClass = model.flameColor ? 'area-material' : 'area-material is-solo'
+
   return (
     <div className="result-grid result-grid--image">
-      <DetectionCard detection={model.detection} className="area-detection" />
-      <FlameImageCard image={model.flameImage} className="area-image" />
-      <FireClassCard fireClass={model.fireClass} className="area-class" />
-      <MaterialCard material={model.material} className="area-material" />
-      <FlameColorCard color={model.flameColor} className="area-color" />
+      <FlameImageCard image={model.flameImage} className={imageClass} />
+      <DetectionCard detection={model.detection} className={detectionClass} />
+      <FlameColorCard color={model.flameColor} className={colorClass} />
+      <MaterialCard material={model.material} className={materialClass} />
       <AiMaterialCard ai={model.ai} className="area-ai" />
+      <FireClassCard fireClass={model.fireClass} className="area-class" />
       {!model.fireClass && model.suppression ? (
         <SuppressionCard suppression={model.suppression} className="area-class" />
       ) : null}
 
       {model.duration ? (
-        <Card className="result-card statusbar area-status" aria-label="Analysis status">
+        <Card className="statusbar area-status" aria-label="Analysis status">
           <DurationNote duration={model.duration} />
         </Card>
       ) : null}

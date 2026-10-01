@@ -9,15 +9,18 @@ import { aggregateFrameResults } from '../src/utils/aggregate.js'
 import { REPRESENTATIVE_FRAME_COUNT } from '../src/config.js'
 
 /**
- * The compactness and responsiveness of the result data model.
+ * The compactness and responsiveness of the result data model, and of the layout
+ * that presents it.
  *
- * Two things are asserted here. First, what the view model hands the components:
- * a gallery of two or three frames, a summary of three numbers, a colour card of
- * a swatch plus two values, and at most three alternatives - so a card cannot be
- * given content that would stretch it. Second, the stylesheet itself: no fixed
- * heights, no large min-heights, no `height: 100%` and no stretching alignment on
- * the result grid, plus a single-column mobile layout with the gallery as the
- * only horizontal scroll.
+ * Three things are asserted here. First, what the view model hands the
+ * components: a gallery of two or three frames, a summary of three numbers, a
+ * colour card of a swatch plus two values, and at most three alternatives - so a
+ * card cannot be given content that would stretch it. Second, the layout itself:
+ * one results grid, every card placed by an explicit `grid-column`, no
+ * `grid-auto-flow` and no named areas deciding where a result lands, no fixed
+ * heights, and no stretching. Third, the two viewports: a two-column workspace
+ * above 900px and a single-column one below it, where the half-width pairs stop
+ * existing.
  */
 
 const readSource = (relative) =>
@@ -188,37 +191,148 @@ test('no result card uses a fixed height or a min-height', () => {
   }
 })
 
-test('the video result order is frames, summary, detection, colour, material, AI, class', () => {
-  const css = readSource('src/index.css')
-  const areas = css.match(/\.result-grid--video \{[\s\S]*?\}/g).at(-1)
-  const order = [...areas.matchAll(/'([a-z ]+)'/g)].map((match) => match[1].trim())
+/* ------------------------------- the layout ------------------------------- */
 
-  assert.deepEqual(order, [
-    'gallery gallery gallery',
-    'summary summary detection',
-    'color material material',
-    'ai ai class',
-    'status status status',
+/** Every `@media (width)` block in the stylesheet, with its condition in px. */
+function mediaBlocks(css) {
+  return [...css.matchAll(/@media \((?:min|max)-width: (\d+)px\) \{/g)].map((match) => {
+    const start = match.index + match[0].length
+    const next = css.indexOf('\n@media', start)
+    const end = next === -1 ? css.length : next
+    return { condition: Number(match[1]), start, end, body: css.slice(start, end) }
+  })
+}
+
+const RESULT_CARDS = [
+  'AnalyzedFrameGallery',
+  'VideoSummaryCard',
+  'FlameImageCard',
+  'DetectionCard',
+  'FlameColorCard',
+  'MaterialCard',
+  'AiMaterialCard',
+  'FireClassCard',
+  'SuppressionCard',
+  'DurationNote',
+]
+
+/** The result cards in the order the component renders them. */
+const renderedOrder = (component) => {
+  const source = readSource(`src/components/${component}`)
+  return [...source.matchAll(/<([A-Z][A-Za-z]+)\b/g)]
+    .map((match) => match[1])
+    .filter((name) => RESULT_CARDS.includes(name))
+}
+
+test('the video dashboard renders in one fixed card order', () => {
+  assert.deepEqual(renderedOrder('VideoAnalysisResult.jsx'), [
+    'AnalyzedFrameGallery',
+    'VideoSummaryCard',
+    'DetectionCard',
+    'FlameColorCard',
+    'MaterialCard',
+    'AiMaterialCard',
+    'FireClassCard',
+    'SuppressionCard',
+    'DurationNote',
   ])
 })
 
-test('both result grids are a single column below the first breakpoint', () => {
+test('the image dashboard renders in one fixed card order', () => {
+  assert.deepEqual(renderedOrder('ImageAnalysisResult.jsx'), [
+    'FlameImageCard',
+    'DetectionCard',
+    'FlameColorCard',
+    'MaterialCard',
+    'AiMaterialCard',
+    'FireClassCard',
+    'SuppressionCard',
+    'DurationNote',
+  ])
+})
+
+test('the results are one twelve-column grid that never stretches a card', () => {
   const css = readSource('src/index.css')
-  const base = css.slice(
-    css.indexOf('.result-grid--image {'),
-    css.indexOf('.area-detection'),
-  )
-  assert.match(base, /\.result-grid--image \{[\s\S]*?grid-template-areas:([\s\S]*?);/, 'image areas declared')
-  assert.match(base, /\.result-grid--video \{[\s\S]*?grid-template-areas:([\s\S]*?);/, 'video areas declared')
-  // Every base area is one column wide: nothing spans, so mobile is one column.
-  const areas = [...base.matchAll(/grid-template-areas:\s*([\s\S]*?);/g)].map((match) =>
-    [...match[1].matchAll(/'([a-z ]+)'/g)].map((row) => row[1].trim()),
-  )
-  for (const rows of areas) {
-    for (const row of rows) {
-      assert.equal(row.includes(' '), false, `"${row}" must be a single column on mobile`)
-    }
+  const grid = css.slice(css.indexOf('.result-grid {'), css.indexOf('.result-card {'))
+
+  assert.match(grid, /grid-template-columns:\s*repeat\(12, minmax\(0, 1fr\)\);/, 'twelve tracks')
+  assert.match(grid, /gap:\s*var\(--result-gap\);/, 'one uniform gap')
+  assert.match(grid, /align-items:\s*start;/, 'cards keep their natural height')
+})
+
+test('a result card is never placed by a named area or by auto-placement', () => {
+  const css = readSource('src/index.css')
+
+  assert.equal(/grid-template-areas/.test(css), false, 'no named areas decide placement')
+  assert.equal(/(^|[\s;{])grid-area:/.test(css), false, 'no card is placed by grid-area')
+  assert.equal(/\.result-grid[^{]*\{[^}]*grid-auto-flow/.test(css), false, 'no auto-flow')
+})
+
+test('every result card class declares the columns it occupies', () => {
+  const css = readSource('src/index.css')
+  const defaults = css.slice(css.indexOf('.area-gallery,'), css.indexOf('@media (min-width: 901px) {\n  /* Video'))
+
+  for (const area of [
+    'area-gallery',
+    'area-summary',
+    'area-image',
+    'area-detection',
+    'area-color',
+    'area-material',
+    'area-ai',
+    'area-class',
+    'area-status',
+  ]) {
+    assert.ok(defaults.includes(`.${area}`), `${area} is placed by the grid`)
   }
+  assert.match(defaults, /grid-column:\s*1 \/ -1;/, 'the default is the full results width')
+})
+
+test('the only half-width cards are the video pair and the image pairs', () => {
+  const css = readSource('src/index.css')
+  const spans = [...css.matchAll(/grid-column:\s*span \d+;/g)]
+
+  assert.equal(spans.length, 3, 'exactly the three deliberate pairs: video, image, image')
+  assert.match(css, /\.result-grid--video \.area-detection,\s*\.result-grid--video \.area-color \{\s*grid-column:\s*span 6;/)
+  assert.match(css, /\.result-grid--image \.area-image,\s*\.result-grid--image \.area-color \{\s*grid-column:\s*span 7;/)
+  assert.match(css, /\.result-grid--image \.area-detection,\s*\.result-grid--image \.area-material \{\s*grid-column:\s*span 5;/)
+
+  for (const span of spans) {
+    const block = mediaBlocks(css).find((entry) => span.index >= entry.start && span.index <= entry.end)
+    assert.ok(block, `a span outside any media query: ${span[0]}`)
+    assert.equal(block.condition, 901, 'pairs only exist on the two-column viewport')
+  }
+})
+
+test('a pair card with no partner fills its row instead of leaving half blank', () => {
+  const css = readSource('src/index.css')
+  assert.match(css, /\.result-grid \.is-solo \{\s*grid-column:\s*1 \/ -1;/)
+
+  for (const component of ['VideoAnalysisResult.jsx', 'ImageAnalysisResult.jsx']) {
+    const source = readSource(`src/components/${component}`)
+    assert.match(source, /is-solo/, `${component} marks an unpaired card`)
+  }
+})
+
+test('the workspace is two columns above 900px and one column below it', () => {
+  const css = readSource('src/index.css')
+  const workspace = css.slice(css.indexOf('.workspace {'), css.indexOf('.workspace__col {'))
+
+  assert.match(workspace, /grid-template-columns:\s*minmax\(0, 1fr\);/, 'one column by default')
+  assert.match(workspace, /align-items:\s*start;/, 'the source panel is never stretched')
+
+  const wide = mediaBlocks(css).find((block) => block.condition === 901 && block.body.includes('.workspace {'))
+  assert.ok(wide, 'the two-column workspace is declared')
+  assert.match(wide.body, /grid-template-columns:\s*var\(--workspace-input\) minmax\(0, 1fr\);/)
+})
+
+test('the source panel is content-sized and the page is a bounded canvas', () => {
+  const css = readSource('src/index.css')
+
+  assert.match(css, /\.input-panel \{[\s\S]*?align-self:\s*start;/, 'the source panel keeps its own height')
+  assert.equal(/\.input-panel \{[^}]*height:/.test(css), false, 'the source panel has no height of its own')
+  assert.match(css, /--app-width:\s*min\(100% - 32px, 1400px\);/, 'the canvas stops growing at 1400px')
+  assert.match(css, /\.shell \{[\s\S]*?width:\s*var\(--app-width\);[\s\S]*?margin-inline:\s*auto;/)
 })
 
 test('the frame gallery is the only horizontally scrolling element', () => {
@@ -227,5 +341,5 @@ test('the frame gallery is the only horizontally scrolling element', () => {
 
   assert.equal(scrollers.length, 1, 'exactly one horizontal scroll container')
   assert.match(scrollers[0][1].trim(), /\.gallery__track/)
-  assert.match(readSource('src/index.css'), /body \{[\s\S]*?overflow-x:\s*hidden;/, 'the page never scrolls sideways')
+  assert.match(css, /body \{[\s\S]*?overflow-x:\s*hidden;/, 'the page never scrolls sideways')
 })

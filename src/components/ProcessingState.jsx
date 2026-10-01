@@ -43,10 +43,7 @@ export function ImageProcessingState({ startedAt }) {
     <Card className="result-card processing" role="status" aria-live="polite">
       <div className="processing__head">
         <LoaderCircle size={17} strokeWidth={1.75} aria-hidden="true" className="spin-icon" />
-        <div>
-          <p className="processing__title">Analyzing flame…</p>
-          <p className="processing__sub">One request covers every step below.</p>
-        </div>
+        <p className="processing__title">Analyzing flame…</p>
         <span className="processing__elapsed is-mono">
           <Clock size={12} strokeWidth={1.75} aria-hidden="true" />
           {formatDuration(elapsedMs) ?? '0.0s'}
@@ -85,12 +82,7 @@ export function VideoProcessingState({ progress, estimatedRemainingMs, startedAt
     <Card className="result-card processing" role="status" aria-live="polite">
       <div className="processing__head">
         <LoaderCircle size={17} strokeWidth={1.75} aria-hidden="true" className="spin-icon" />
-        <div>
-          <p className="processing__title">
-            {extracting ? 'Preparing frames…' : `Analyzing ${total || ''} sampled frames`}
-          </p>
-          <p className="processing__sub">Randomly sampled points across the video.</p>
-        </div>
+        <p className="processing__title">{extracting ? 'Preparing frames…' : 'Analyzing frames…'}</p>
         <span className="processing__elapsed is-mono">
           <Clock size={12} strokeWidth={1.75} aria-hidden="true" />
           {formatDuration(elapsedMs) ?? '0.0s'}

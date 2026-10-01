@@ -138,7 +138,7 @@ export default function VideoUpload({
             <FileVideo size={24} strokeWidth={1.5} />
           </span>
           <p className="dropzone__title">Drop a video here</p>
-          <p className="dropzone__desc">randomly sampled frames are analyzed, not the whole clip.</p>
+          <p className="dropzone__desc">or choose a file to analyze.</p>
           <button
             type="button"
             className="btn btn--secondary"

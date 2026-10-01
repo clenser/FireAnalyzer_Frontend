@@ -1,21 +1,17 @@
-import { Clock, Droplets } from 'lucide-react'
+import { CheckCircle, Droplets } from 'lucide-react'
+import { Card, CardHeader } from './ui'
 
 /**
  * The fallback agent list for a payload that reports suppression methods but no
- * fire class. It keeps the recommendation visible without duplicating the
- * fire-class card.
+ * fire class. It keeps the recommendation visible, in the same full-width row the
+ * fire-class card would occupy, without duplicating that card.
  */
 export default function SuppressionCard({ suppression, className = '' }) {
   if (!suppression?.methods?.length) return null
 
   return (
-    <section className={`result-card suppression-card ${className}`.trim()}>
-      <div className="gallery__head">
-        <h3 className="card__title">
-          <Droplets size={14} strokeWidth={1.75} aria-hidden="true" />
-          Suppression Methods
-        </h3>
-      </div>
+    <Card className={`result-card suppression-card ${className}`.trim()}>
+      <CardHeader icon={Droplets} title="Suppression Methods" />
       <ul className="agents">
         {suppression.methods.map((method) => (
           <li className="agent" key={method}>
@@ -24,7 +20,7 @@ export default function SuppressionCard({ suppression, className = '' }) {
           </li>
         ))}
       </ul>
-    </section>
+    </Card>
   )
 }
 
@@ -33,7 +29,7 @@ export function DurationNote({ duration }) {
   if (!duration) return null
   return (
     <p className="statusbar__item is-mono">
-      <Clock size={12} strokeWidth={1.75} aria-hidden="true" />
+      <CheckCircle size={13} strokeWidth={2} aria-hidden="true" />
       {duration.label}
     </p>
   )

@@ -1,5 +1,3 @@
-import { ChevronDown } from 'lucide-react'
-
 export function Card({ as: Tag = 'section', className = '', children, ...rest }) {
   return (
     <Tag className={`card ${className}`.trim()} {...rest}>
@@ -101,21 +99,6 @@ export function IndeterminateBar({ label }) {
     <div className="progress progress--indeterminate" role="progressbar" aria-label={label}>
       <span className="progress__bar" />
     </div>
-  )
-}
-
-/**
- * Collapsed-by-default disclosure, used for the one piece of optional AI context.
- */
-export function Disclosure({ label, children, tone = 'default' }) {
-  return (
-    <details className={`disclosure disclosure--${tone}`}>
-      <summary className="disclosure__trigger">
-        <ChevronDown size={13} strokeWidth={2} aria-hidden="true" className="disclosure__chevron" />
-        {label}
-      </summary>
-      <div className="disclosure__body">{children}</div>
-    </details>
   )
 }
 

@@ -9,6 +9,10 @@ import { Card, CardHeader, Meter } from './ui'
  * returns the same structure. Either way the backend decides - the client's only
  * job is to show its answer.
  *
+ * The card is full width, so the match sits on the left and the alternatives on
+ * the right: one short row of content on each side instead of a wide line of text
+ * with empty space beside it.
+ *
  * When that endpoint could not answer, the caller passes `unavailable` and this
  * renders a single compact line. No material is invented to fill the card.
  */
@@ -32,40 +36,44 @@ export default function MaterialCard({ material, unavailable = false, className 
     <Card className={`result-card material-card ${className}`.trim()}>
       <CardHeader icon={Boxes} title={title} />
 
-      <div className="material">
-        <p className="material__name">{name}</p>
-        {similarity ? (
-          <p className="material__similarity is-mono">
-            {similarity}
-            <span className="material__similarity-label"> match</span>
-          </p>
-        ) : null}
-        {similarityRatio !== null && similarityRatio !== undefined ? (
-          <Meter
-            value={similarityRatio}
-            label={`Material match similarity ${similarity}`}
-            tone="cyan"
-          />
+      <div className="split">
+        <div className="split__lead">
+          <div className="material">
+            <p className="material__name">{name}</p>
+            {similarity ? (
+              <p className="material__similarity is-mono">
+                {similarity}
+                <span className="material__similarity-label"> match</span>
+              </p>
+            ) : null}
+            {similarityRatio !== null && similarityRatio !== undefined ? (
+              <Meter
+                value={similarityRatio}
+                label={`Material match similarity ${similarity}`}
+                tone="cyan"
+              />
+            ) : null}
+          </div>
+        </div>
+
+        {hasAlternatives ? (
+          <div className="split__aside">
+            <p className="subsection__title">
+              <Layers size={12} strokeWidth={1.75} aria-hidden="true" />
+              Alternative matches
+            </p>
+            <ol className="alts">
+              {alternatives.map((alt) => (
+                <li className="alt" key={`${alt.name}-${alt.rank}`}>
+                  <span className="alt__rank is-mono">{alt.label}</span>
+                  <span className="alt__name">{alt.name}</span>
+                  <span className="alt__sim is-mono">{alt.similarity ?? '--'}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
         ) : null}
       </div>
-
-      {hasAlternatives ? (
-        <div className="subsection">
-          <p className="subsection__title">
-            <Layers size={12} strokeWidth={1.75} aria-hidden="true" />
-            Alternative matches
-          </p>
-          <ol className="alts">
-            {alternatives.map((alt) => (
-              <li className="alt" key={`${alt.name}-${alt.rank}`}>
-                <span className="alt__rank is-mono">{alt.label}</span>
-                <span className="alt__name">{alt.name}</span>
-                <span className="alt__sim is-mono">{alt.similarity ?? '--'}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      ) : null}
     </Card>
   )
 }

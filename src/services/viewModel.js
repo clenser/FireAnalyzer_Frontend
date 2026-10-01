@@ -62,10 +62,6 @@ function buildDetectionModel(data) {
     confidence,
     flameArea: area,
     confidenceRatio: isFiniteNumber(detection.confidence) ? detection.confidence : null,
-    // Shown as a number + word so status never depends on colour alone.
-    statusNote: detected
-      ? 'A flame region was located in the image.'
-      : 'No flame region was located in this image.',
   }
 }
 
@@ -157,7 +153,6 @@ export function buildAiModel(ai, { aggregated = false } = {}) {
         ? `${match.confidencePercent.toFixed(1)}%`
         : null,
     })),
-    why: nullish(ai.reasoningSummary),
   }
 }
 
@@ -176,12 +171,6 @@ function buildFireClassModel(fireClass, agents, material) {
     description: nullish(fireClass?.description),
     material: materialName,
     agents: agentList,
-    // One short sentence at most - no regulatory or algorithmic explanation.
-    sentence: name
-      ? `Fire class ${name}${
-          materialName ? `, matched from ${materialName.toLowerCase()}` : ''
-        }.`
-      : null,
   }
 }
 
@@ -342,7 +331,6 @@ export function buildVideoResultModel({
       confidence: agg.averageConfidence === null ? null : `${(agg.averageConfidence * 100).toFixed(1)}%`,
       confidenceRatio: agg.averageConfidence,
       flameArea: null,
-      statusNote: 'Average confidence across the analyzed frames with a detected flame.',
     },
     flameColor,
     material,

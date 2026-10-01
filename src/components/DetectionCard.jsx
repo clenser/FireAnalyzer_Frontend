@@ -10,7 +10,7 @@ import { Card, CardHeader, Meter, Stat } from './ui'
 export default function DetectionCard({ detection, className = '' }) {
   if (!detection) return null
 
-  const { detected, statusText, headline, confidence, flameArea, statusNote } = detection
+  const { detected, statusText, headline, confidence, flameArea } = detection
 
   return (
     <Card className={`result-card detection-card ${className}`.trim()} data-detected={detected ? 'true' : 'false'}>
@@ -26,7 +26,6 @@ export default function DetectionCard({ detection, className = '' }) {
         </span>
         <div className="verdict__body">
           <p className="verdict__headline">{headline}</p>
-          <p className="verdict__note">{statusNote}</p>
         </div>
       </div>
 

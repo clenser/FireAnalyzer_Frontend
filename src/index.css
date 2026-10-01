@@ -54,11 +54,17 @@
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
   /* Viewport-aware bounds: nothing in the UI may grow without limit. */
-  --panel-max-h: min(88vh, 780px);
   --preview-max-h: clamp(150px, 34vh, 320px);
-  --result-preview-max-h: clamp(200px, 44vh, 460px);
+  --result-preview-max-h: clamp(200px, 44vh, 520px);
   --gap: 12px;
   --gap-lg: 16px;
+
+  /* Workspace geometry. The application is one bounded canvas with one source
+     column and one results column - never a full-bleed page. */
+  --app-width: min(100% - 32px, 1400px);
+  --workspace-gap: 24px;
+  --workspace-input: 320px;
+  --result-gap: 16px;
 
   color-scheme: dark;
 }
@@ -173,10 +179,9 @@ legend {
 }
 
 .shell {
-  width: 100%;
-  max-width: 1440px;
-  margin: 0 auto;
-  padding: 0 28px 56px;
+  width: var(--app-width);
+  margin-inline: auto;
+  padding-bottom: 48px;
 }
 
 /* ============================================================
@@ -194,9 +199,8 @@ legend {
 }
 
 .topbar__inner {
-  max-width: 1440px;
-  margin: 0 auto;
-  padding: 0 28px;
+  width: var(--app-width);
+  margin-inline: auto;
   height: 58px;
   display: flex;
   align-items: center;
@@ -316,7 +320,7 @@ legend {
    ============================================================ */
 
 .hero {
-  padding: 28px 0 20px;
+  padding: 24px 0 18px;
   max-width: 720px;
 }
 
@@ -348,10 +352,15 @@ legend {
    Workspace layout
    ============================================================ */
 
+/* One workspace: the source panel owns the left column, the results own the
+   right one, and nothing escapes its column. `align-items: start` keeps the
+   source panel at its natural height instead of stretching it to the height of
+   the results beside it. Below 900px the grid is a single column, so the source
+   stacks above the results. */
 .workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--gap-lg);
+  gap: var(--workspace-gap);
   align-items: start;
 }
 
@@ -359,9 +368,9 @@ legend {
   min-width: 0;
 }
 
-@media (min-width: 1040px) {
+@media (min-width: 901px) {
   .workspace {
-    grid-template-columns: minmax(320px, 372px) minmax(0, 1fr);
+    grid-template-columns: var(--workspace-input) minmax(0, 1fr);
   }
 
   .workspace__col--input {
@@ -384,13 +393,13 @@ legend {
   padding: 16px;
 }
 
-/* The source panel is the one place with a hard height budget: it never grows
-   with its content, and the body scrolls instead. */
+/* The source panel is content-sized. It never stretches to match the results
+   beside it and never carries a height budget of its own: it ends shortly after
+   its last control. */
 .input-panel {
   display: flex;
   flex-direction: column;
-  max-height: var(--panel-max-h);
-  overflow: hidden;
+  align-self: start;
 }
 
 .panel__header {
@@ -411,11 +420,9 @@ legend {
 }
 
 .panel__body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: 2px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .panel__note {
@@ -850,20 +857,6 @@ legend {
   border-color: var(--border-strong);
 }
 
-.frames__hint {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  font-size: 11.5px;
-  line-height: 1.45;
-  color: var(--text-3);
-}
-
-.frames__hint svg {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
 /* Estimate strip */
 
 .estimate {
@@ -981,18 +974,39 @@ legend {
 }
 
 /* ============================================================
+   Results workspace
+   ============================================================ */
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.results__title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+/* ============================================================
    Result grid
    ============================================================ */
 
-/* Cards size themselves to their content. `align-items: start` is what stops a
-   short card from being stretched to the height of the tallest card in its grid
-   row - the single biggest source of dead space in a results dashboard. The rows
-   below are paired so that cards of similar height share a row, and nothing in
-   the grid uses a fixed height, a min-height or `height: 100%`. */
+/* The results are ONE grid. Twelve tracks, one gap, and every card states the
+   columns it occupies - nothing is left to auto-placement, so the placement is
+   identical on every render and every card shares the same left and right
+   boundaries. `align-items: start` is what keeps a short card at its own height
+   instead of being stretched to match the tallest card in its row: the single
+   biggest source of dead space in a results dashboard. Nothing in this grid uses
+   a fixed height, a min-height or `height: 100%`. */
 .result-grid {
   display: grid;
-  gap: var(--gap);
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--result-gap);
   align-content: start;
   align-items: start;
 }
@@ -1006,107 +1020,74 @@ legend {
   margin-bottom: 10px;
 }
 
-/* Result priority order: detection, flame visual, fire class, material,
-   colour, AI, supporting status. Declared per breakpoint so desktop can place
-   the picture and detection side by side while the DOM stays in this order. */
-.result-grid--image {
-  grid-template-areas:
-    'detection'
-    'image'
-    'class'
-    'material'
-    'color'
-    'ai'
-    'status';
-}
-
-/* Video order: analyzed frames, summary, detection, average colour, material,
-   AI, fire class, status. */
-.result-grid--video {
-  grid-template-areas:
-    'gallery'
-    'summary'
-    'detection'
-    'color'
-    'material'
-    'ai'
-    'class'
-    'status';
-}
-
-.area-detection {
-  grid-area: detection;
-}
-.area-image {
-  grid-area: image;
-}
-.area-class {
-  grid-area: class;
-}
-.area-material {
-  grid-area: material;
-}
-.area-color {
-  grid-area: color;
-}
-.area-ai {
-  grid-area: ai;
-}
-.area-gallery {
-  grid-area: gallery;
-}
-.area-summary {
-  grid-area: summary;
-}
+/* Default placement: a full-width row. Only the two deliberate pairs below
+   narrow this, so a card can never land in an arbitrary column. */
+.area-gallery,
+.area-summary,
+.area-image,
+.area-detection,
+.area-color,
+.area-material,
+.area-ai,
+.area-class,
 .area-status {
-  grid-area: status;
+  grid-column: 1 / -1;
 }
 
-@media (min-width: 620px) {
-  .result-grid--image {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-      'image detection'
-      'color material'
-      'class class'
-      'ai ai'
-      'status status';
+@media (min-width: 901px) {
+  /* Video: analyzed frames and the summary are full width, then flame detection
+     and the average flame colour share one row, then material, AI and fire class
+     each take the full width in that order. */
+  .result-grid--video .area-detection,
+  .result-grid--video .area-color {
+    grid-column: span 6;
   }
 
-  /* Three cards whose heights are close enough that the row reads as full:
-     the summary and the colour measurement are short, detection is the tall one
-     that anchors the row. Material sits under summary+detection, the AI card
-     beside it, and the fire class gets its own full-width row. */
-  .result-grid--video {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-      'gallery gallery'
-      'summary detection'
-      'color color'
-      'material ai'
-      'class class'
-      'status status';
+  /* Image: the analyzed picture dominates, detection sits beside it, and the
+     mean colour / material pair repeats the same column boundary. AI material
+     analysis and the fire class are then full width. */
+  .result-grid--image .area-image,
+  .result-grid--image .area-color {
+    grid-column: span 7;
+  }
+
+  .result-grid--image .area-detection,
+  .result-grid--image .area-material {
+    grid-column: span 5;
+  }
+
+  /* A pair card whose partner the data did not produce fills the row rather
+     than leaving half of it blank. Declared after the pair spans so it wins. */
+  .result-grid .is-solo {
+    grid-column: 1 / -1;
   }
 }
 
-@media (min-width: 1280px) {
-  .result-grid--image {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-template-areas:
-      'image image detection'
-      'class color material'
-      'ai ai ai'
-      'status status status';
+/* A full-width card whose content is one primary figure plus a longer list.
+   Two columns on a wide screen - the figure on the left, the list on the right -
+   so the card is as short as its content allows and the row reads as one block
+   instead of a wide line of text with empty space beside it. */
+.split {
+  display: grid;
+  gap: 14px;
+  align-items: start;
+}
+
+.split__lead {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+@media (min-width: 700px) {
+  .split {
+    grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
   }
 
-  .result-grid--video {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-template-areas:
-      'gallery gallery gallery'
-      'summary summary detection'
-      'color material material'
-      'ai ai class'
-      'status status status';
+  .split__aside {
+    padding-left: 16px;
+    border-left: 1px solid var(--border-soft);
   }
 }
 
@@ -1148,12 +1129,6 @@ legend {
   font-weight: 600;
   letter-spacing: -0.015em;
   line-height: 1.25;
-}
-
-.verdict__note {
-  font-size: 12px;
-  color: var(--text-3);
-  margin-top: 2px;
 }
 
 .stat-row {
@@ -1236,6 +1211,8 @@ legend {
    Flame image
    ============================================================ */
 
+/* The analyzed picture is the dominant element of the image dashboard, so the
+   card is only as tall as the bounded image box plus its two tag chips. */
 .flame-image {
   display: flex;
   flex-direction: column;
@@ -1248,11 +1225,6 @@ legend {
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
-}
-
-.flame-image__label {
-  font-size: 11.5px;
-  color: var(--text-3);
 }
 
 .flame-image__tags,
@@ -1445,7 +1417,8 @@ legend {
 .ai-primary {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
+  min-width: 0;
 }
 
 .ai-primary__name {
@@ -1469,62 +1442,12 @@ legend {
 .ai-levels {
   display: flex;
   gap: 6px;
-  margin-top: 9px;
-}
-
-/* One short line clarifying that the video verdict is a single consolidated
-   assessment, not a per-frame one. */
-.ai-scope {
-  margin-top: 6px;
-  font-size: 11.5px;
-  color: var(--text-3);
 }
 
 .ai-unavailable {
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--text-3);
-}
-
-.ai-why {
-  font-size: 12px;
-  line-height: 1.55;
-  color: var(--text-2);
-}
-
-.disclosure {
-  margin-top: 12px;
-  border-top: 1px solid var(--border-soft);
-  padding-top: 9px;
-}
-
-.disclosure__trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--text-3);
-  cursor: pointer;
-  list-style: none;
-}
-
-.disclosure__trigger::-webkit-details-marker {
-  display: none;
-}
-
-.disclosure__chevron {
-  transition: transform 0.15s ease;
-}
-
-.disclosure[open] .disclosure__chevron {
-  transform: rotate(180deg);
-}
-
-.disclosure__body {
-  margin-top: 8px;
-  max-height: 190px;
-  overflow-y: auto;
 }
 
 /* ============================================================
@@ -1535,6 +1458,7 @@ legend {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  min-width: 0;
 }
 
 .fireclass__name {
@@ -1552,17 +1476,26 @@ legend {
 
 .fireclass__material {
   font-size: 11.5px;
-  color: var(--text-3);
+  color: var(--text-4);
 }
 
 .fireclass__material-name {
   color: var(--text-2);
 }
 
-.fireclass__sentence {
-  font-size: 12px;
+.fireclass__material-label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--text-4);
-  margin-top: 2px;
+  display: block;
+}
+
+.fireclass__material-value {
+  font-size: 12.5px;
+  color: var(--text-2);
 }
 
 .agents {
@@ -1589,7 +1522,7 @@ legend {
 }
 
 /* ============================================================
-   Video: gallery + summary
+   Video: analyzed frames + summary
    ============================================================ */
 
 .gallery {
@@ -1610,12 +1543,14 @@ legend {
   border-bottom: 1px solid var(--border-soft);
 }
 
-/* The only intentional horizontal scroll in the UI. */
+/* Equal-width frame tiles filling the row. The only intentional horizontal
+   scroll in the UI: on a phone the three frames stay on one line and the strip -
+   never the page - scrolls. */
 .gallery__track {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(150px, 1fr);
-  gap: 10px;
+  grid-auto-columns: minmax(168px, 1fr);
+  gap: 12px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scroll-snap-type: x proximity;
@@ -1626,8 +1561,12 @@ legend {
   scroll-snap-align: start;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  background: var(--bg-soft);
 }
 
 .gallery__meta {
@@ -1652,13 +1591,30 @@ legend {
   color: var(--text-4);
 }
 
+/* The three summary counts sit side by side across the full width, as cells
+   rather than a sparse line of text. Natural content height, no prose under the
+   numbers. */
+.video-summary__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.video-summary__stats .stat {
+  gap: 2px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  background: var(--bg-soft);
+}
+
 .video-summary__warning {
   display: flex;
   align-items: flex-start;
   gap: 7px;
   font-size: 11.5px;
   line-height: 1.5;
-  margin-top: 9px;
+  margin-top: 10px;
   color: #fda19b;
 }
 
@@ -1668,15 +1624,19 @@ legend {
 }
 
 /* ============================================================
-   Status bar
+   Processing status row
    ============================================================ */
 
+/* A compact footer for the whole dashboard: one line, no card-sized padding. */
 .statusbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  padding: 9px 14px;
+  padding: 8px 12px;
+  border-radius: var(--r-md);
+  background: var(--bg-soft);
+  border-color: var(--border-soft);
 }
 
 .statusbar__item {
@@ -1711,11 +1671,6 @@ legend {
 .processing__title {
   font-size: 14.5px;
   font-weight: 600;
-}
-
-.processing__sub {
-  font-size: 12px;
-  color: var(--text-3);
 }
 
 .processing__elapsed {
@@ -1950,22 +1905,29 @@ legend {
 
 /* ============================================================
    Responsive
-   ============================================================ */
+   ============================================================
 
-@media (max-width: 1120px) {
-  .shell,
-  .topbar__inner {
-    padding-left: 22px;
-    padding-right: 22px;
+   The workspace collapses to one column at 900px (see the workspace block): the
+   source stacks above the results, and because every result card's grid columns
+   are declared inside `min-width: 901px`, the results column is a single column
+   at the same width. Below 640px only the type scale, the tap targets and the
+   frame-strip width change - the page itself never scrolls sideways. */
+
+@media (max-width: 900px) {
+  :root {
+    --workspace-gap: 20px;
   }
 }
 
 @media (max-width: 640px) {
   :root {
+    --app-width: min(100% - 24px, 1400px);
     --gap: 10px;
     --gap-lg: 12px;
+    --workspace-gap: 16px;
+    --result-gap: 12px;
     --preview-max-h: clamp(120px, 26vh, 220px);
-    --result-preview-max-h: clamp(160px, 30vh, 300px);
+    --result-preview-max-h: clamp(160px, 30vh, 320px);
   }
 
   body {
@@ -1973,15 +1935,11 @@ legend {
   }
 
   .shell {
-    padding-left: 14px;
-    padding-right: 14px;
     padding-bottom: 40px;
   }
 
   .topbar__inner {
     height: 54px;
-    padding-left: 14px;
-    padding-right: 14px;
   }
 
   .brand__tag,
@@ -1995,11 +1953,7 @@ legend {
 
   .panel,
   .result-card {
-    padding: 12px;
-  }
-
-  .input-panel {
-    max-height: min(92vh, 720px);
+    padding: 14px;
   }
 
   .btn {
@@ -2024,7 +1978,12 @@ legend {
   }
 
   .gallery__track {
-    grid-auto-columns: minmax(132px, 46%);
+    grid-auto-columns: minmax(136px, 52%);
+  }
+
+  .video-summary__stats .stat__label,
+  .stat__label {
+    font-size: 9.5px;
   }
 }
 

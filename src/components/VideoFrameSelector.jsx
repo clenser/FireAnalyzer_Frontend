@@ -1,10 +1,10 @@
-import { Shuffle } from 'lucide-react'
 import { FRAME_COUNT_OPTIONS, MAX_FRAME_COUNT, MIN_FRAME_COUNT } from '../config'
 import { isValidFrameCount, resolveFrameCount } from '../utils/videoFrames'
 
 /**
  * How many frames to sample. Quick-pick chips plus a number field, both clamped
- * to the supported range so the backend can never be flooded.
+ * to the supported range so the backend can never be flooded. The chosen count is
+ * the whole story here - no explanation of what a frame is.
  */
 export default function VideoFrameSelector({ value, onChange, disabled = false }) {
   const effective = resolveFrameCount(value)
@@ -50,18 +50,9 @@ export default function VideoFrameSelector({ value, onChange, disabled = false }
               const next = Number.parseInt(event.target.value, 10)
               onChange(isValidFrameCount(next) ? next : resolveFrameCount(next))
             }}
-            aria-describedby="frame-count-hint"
           />
         </span>
       </div>
-
-      <p className="frames__hint" id="frame-count-hint">
-        <Shuffle size={12} strokeWidth={1.75} aria-hidden="true" />
-        <span>
-          {effective} {effective === 1 ? 'frame' : 'frames'} will be analyzed at random points
-          across the video.
-        </span>
-      </p>
     </fieldset>
   )
 }

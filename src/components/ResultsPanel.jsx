@@ -43,13 +43,22 @@ function EmptyState({ mode }) {
 }
 
 /**
- * Hosts the result area: empty, processing, failed or the result dashboard for
- * whichever source type is active. Only one of the two dashboards is ever
- * mounted, so no hidden panel can grow the page.
+ * Hosts the result area: the workspace heading plus empty, processing, failed or
+ * the result dashboard for whichever source type is active. Only one of the two
+ * dashboards is ever mounted, so no hidden panel can grow the page.
  */
 export default function ResultsPanel({ mode, image, video }) {
   const active = mode === 'video' ? video : image
 
+  return (
+    <div className="results">
+      <h2 className="results__title">Results</h2>
+      <ResultsBody mode={mode} image={image} video={video} active={active} />
+    </div>
+  )
+}
+
+function ResultsBody({ mode, image, video, active }) {
   if (active.isAnalyzing || active.isBusy) {
     return mode === 'video' ? (
       <VideoProcessingState

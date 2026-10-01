@@ -1,24 +1,23 @@
-import { Chip } from './ui'
+import { Images } from 'lucide-react'
+import { Card, CardHeader, Chip } from './ui'
 import { ImageCanvas } from './ImageCanvas'
 import { formatTimestamp } from '../utils/format'
 
 /**
- * Two or three representative analyzed frames.
+ * The two or three representative analyzed frames.
  *
  * Every sampled frame is analyzed, but only a small spread is shown - the rest are
- * counted in the video summary. The heading is plain: the individual frames carry
- * their own timestamps, so no "sampled frames" explanation is repeated here. The
- * row scrolls horizontally on narrow screens by design; the page itself never
- * does.
+ * counted in the video summary, so this card carries no explanation of its own:
+ * the heading is plain and each tile states its own frame number, timestamp and
+ * outcome. The tiles are equal width and fill the row; on a phone they stay on
+ * one line and the strip, never the page, scrolls sideways.
  */
 export default function AnalyzedFrameGallery({ frames, className = '' }) {
   if (!frames?.length) return null
 
   return (
-    <section className={`result-card gallery ${className}`.trim()}>
-      <div className="gallery__head">
-        <h3 className="card__title">Analyzed Frames</h3>
-      </div>
+    <Card className={`result-card gallery ${className}`.trim()}>
+      <CardHeader icon={Images} title="Analyzed Frames" />
 
       <ul className="gallery__track">
         {frames.map((frame) => (
@@ -43,6 +42,6 @@ export default function AnalyzedFrameGallery({ frames, className = '' }) {
           </li>
         ))}
       </ul>
-    </section>
+    </Card>
   )
 }
