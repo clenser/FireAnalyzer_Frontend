@@ -1,141 +1,46 @@
-import { Flame, CircleCheck, CircleAlert, ScanLine } from 'lucide-react'
-import { Card, CardHeader, Meter, DataRow } from './ui'
-import { formatPercent, formatCount } from '../utils/format'
+import { CircleCheck, CircleAlert, Flame } from 'lucide-react'
+import { Card, CardHeader, Meter, Stat } from './ui'
 
-function ConfidenceMeter({ value, label }) {
-  const percent = formatPercent(value)
-  if (percent === null) return null
-  return (
-    <div className="confidence">
-      <Meter value={value} label={`${label} ${percent}`} tone="amber" />
-    </div>
-  )
-}
-
-export default function DetectionCard({ detection, segmentation }) {
+/**
+ * The detection verdict, in the plainest terms possible: was a flame found, how
+ * confident the model is, and how much of the image it covers. Bounding-box
+ * coordinates, mask resolution, segmentation confidence and fallback details
+ * stay in the parsed payload and never reach this card.
+ */
+export default function DetectionCard({ detection, className = '' }) {
   if (!detection) return null
 
-  const detected = detection.detected === true
-  const bbox = detection.boundingBox
+  const { detected, statusText, headline, confidence, flameArea, statusNote } = detection
 
   return (
-    <Card className={`result-card detection-card${detected ? ' is-positive' : ' is-negative'}`}>
-      <CardHeader
-        icon={Flame}
-        title="Fire Detection"
-        tone={detected ? 'positive' : 'negative'}
-        meta={detected ? 'Detected' : 'Not detected'}
-      />
+    <Card className={`result-card detection-card ${className}`.trim()} data-detected={detected ? 'true' : 'false'}>
+      <CardHeader icon={Flame} title="Flame Detection" tone={detected ? 'positive' : 'neutral'} meta={statusText} />
 
       <div className="verdict">
-        <div className="verdict__state">
-          <span className="verdict__icon" aria-hidden="true">
-            {detected ? (
-              <CircleCheck size={20} strokeWidth={1.75} />
-            ) : (
-              <CircleAlert size={20} strokeWidth={1.75} />
-            )}
-          </span>
-          <div>
-            <p className="verdict__headline">{detected ? 'Fire detected' : 'No fire detected'}</p>
-            <p className="verdict__sub">
-              {detection.confidence !== null
-                ? `${formatPercent(detection.confidence)} detection confidence`
-                : 'Confidence not reported by the model'}
-            </p>
-          </div>
-          <p className="verdict__score is-mono">{formatPercent(detection.confidence) ?? '--'}</p>
-        </div>
-        <ConfidenceMeter value={detection.confidence} label="Detection confidence" />
-      </div>
-
-      <div className="drow-list">
-        <DataRow
-          label="Detection"
-          value={detected ? 'Detected' : 'Not detected'}
-          valueTone={detected ? 'positive' : 'negative'}
-        />
-        <DataRow label="Confidence" value={formatPercent(detection.confidence)} mono />
-        <DataRow
-          label="Bounding box"
-          value={
-            bbox
-              ? `x1 ${bbox.x1} · y1 ${bbox.y1} · x2 ${bbox.x2} · y2 ${bbox.y2}`
-              : 'Not reported'
-          }
-          mono
-        />
-      </div>
-
-      {segmentation ? (
-        <div className="subsection">
-          <p className="subsection__title">
-            <ScanLine size={13} strokeWidth={1.75} aria-hidden="true" />
-            Segmentation
-          </p>
-          <div className="drow-list">
-            <DataRow
-              label="Availability"
-              value={
-                segmentation.available === null
-                  ? '--'
-                  : segmentation.available
-                    ? 'Available'
-                    : 'Unavailable'
-              }
-              valueTone={segmentation.available ? 'positive' : 'muted'}
-            />
-            <DataRow
-              label="Fallback"
-              value={
-                segmentation.fallbackUsed === null
-                  ? '--'
-                  : segmentation.fallbackUsed
-                    ? 'Fallback used'
-                    : 'Not used'
-              }
-            />
-            <DataRow
-              label="Flame pixels"
-              value={formatCount(segmentation.flamePixelCount)}
-              mono
-            />
-            <DataRow
-              label="Mask area ratio"
-              value={formatPercent(segmentation.maskAreaRatio, 2)}
-              mono
-            />
-            <DataRow
-              label="Segmentation confidence"
-              value={formatPercent(segmentation.confidence)}
-              mono
-            />
-            {segmentation.maskWidth !== null && segmentation.maskHeight !== null ? (
-              <DataRow
-                label="Mask resolution"
-                value={`${segmentation.maskWidth} × ${segmentation.maskHeight}`}
-                mono
-              />
-            ) : null}
-            <DataRow
-              label="Mask overlay"
-              value={segmentation.maskUrl ? 'Shown on image' : 'Not available'}
-              valueTone={segmentation.maskUrl ? 'positive' : 'muted'}
-            />
-          </div>
-          {segmentation.bboxFallbackReason ? (
-            <p className="panel-note">
-              The segmentation model did not return a usable mask, so the detection bounding box was
-              rasterised instead: {segmentation.bboxFallbackReason}. The overlay therefore shows a
-              rectangle, not the segmented flame region.
-            </p>
+        <span className="verdict__icon" aria-hidden="true">
+          {detected ? (
+            <CircleCheck size={22} strokeWidth={1.75} />
           ) : (
-            <p className="panel-note">
-              The overlay draws the segmented flame mask returned by the API. It is the actual
-              segmented region and is independent of the detection bounding box above.
-            </p>
+            <CircleAlert size={22} strokeWidth={1.75} />
           )}
+        </span>
+        <div className="verdict__body">
+          <p className="verdict__headline">{headline}</p>
+          <p className="verdict__note">{statusNote}</p>
         </div>
+      </div>
+
+      <div className="stat-row">
+        <Stat label="Confidence" value={confidence} mono />
+        {flameArea ? <Stat label="Flame area" value={flameArea} mono /> : null}
+      </div>
+
+      {detection.confidenceRatio !== null && detection.confidenceRatio !== undefined ? (
+        <Meter
+          value={detection.confidenceRatio}
+          label={`Flame detection confidence ${confidence}`}
+          tone={detected ? 'amber' : 'red'}
+        />
       ) : null}
     </Card>
   )

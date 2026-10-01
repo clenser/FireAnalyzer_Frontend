@@ -252,7 +252,11 @@ export function normaliseAiMaterialAnalysis(raw) {
     matches: [],
     overallConfidenceLevel: null,
     uncertain: null,
+    evidenceQuality: null,
     reasoningSummary: null,
+    framesSupplied: null,
+    framesAnalyzed: null,
+    displayThresholdPercent: null,
     error: null,
   }
 
@@ -262,15 +266,15 @@ export function normaliseAiMaterialAnalysis(raw) {
 
   const matchesRaw = firstArray(raw, ['matches']) ?? []
   const matches = matchesRaw
-    .map((entry) => {
+    .map((entry, index) => {
       if (!entry || typeof entry !== 'object') return null
-      const rank = num(entry.rank)
       const material = firstString(entry, ['material', 'name'])
-      // A match without a usable rank or material name cannot be rendered, so it
-      // is dropped rather than surfaced as "undefined".
-      if (rank === null || !material) return null
+      // A match without a material name cannot be rendered, so it is dropped
+      // rather than surfaced as "undefined". A missing rank falls back to the
+      // position in the payload, which the backend already sends ranked.
+      if (!material) return null
       return {
-        rank,
+        rank: num(entry.rank) ?? index + 1,
         material,
         confidencePercent: num(entry.confidence_percent ?? entry.confidencePercent),
         reason: firstString(entry, ['reason']),
@@ -289,9 +293,43 @@ export function normaliseAiMaterialAnalysis(raw) {
       'overallConfidenceLevel',
     ]),
     uncertain: triState(raw.uncertain),
+    evidenceQuality: firstString(raw, ['evidence_quality', 'evidenceQuality']),
     reasoningSummary: firstString(raw, ['reasoning_summary', 'reasoningSummary']),
+    // Only reported by the video endpoint; a single image never carries them.
+    framesSupplied: firstNumber(raw, ['frames_supplied', 'framesSupplied']),
+    framesAnalyzed: firstNumber(raw, ['frames_analyzed', 'framesAnalyzed']),
+    displayThresholdPercent: firstNumber(raw, [
+      'display_threshold_percent',
+      'displayThresholdPercent',
+    ]),
     // Only an unavailable response carries an error; a successful one never does.
     error: available ? null : firstString(raw, ['error']),
+  }
+}
+
+/**
+ * Normalises the `POST /material-identification` response.
+ *
+ * The endpoint is deterministic - the existing matcher over the canonical
+ * dataset - and returns the same structures `/analyze` returns for the material,
+ * the fire class and the extinguishing agents, so the existing normalisers are
+ * reused rather than re-implemented. The top-level `primary_material` /
+ * `similarity` / `alternatives` fields are mirrors of `material_analysis`; the
+ * nested object is preferred because it is the documented one.
+ */
+export function normaliseMaterialIdentification(payload) {
+  const source = payload && typeof payload === 'object' ? payload : {}
+  const materialRaw =
+    firstObject(source, ['material_analysis']) ?? (firstString(source, ['primary_material']) ? source : null)
+
+  return {
+    success: source.success === true,
+    material: normaliseMaterial(materialRaw),
+    fireClass: normaliseFireClass(firstObject(source, ['fire_class', 'fireClass'])),
+    agents: normaliseAgents(source),
+    suppression: normaliseSuppression(
+      firstObject(source, ['suppression_information', 'suppression']),
+    ),
   }
 }
 

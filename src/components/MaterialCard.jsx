@@ -1,73 +1,71 @@
-import { Boxes, Layers, Info } from 'lucide-react'
-import { Card, Meter, PanelNote } from './ui'
-import { formatPercent } from '../utils/format'
+import { Boxes, Layers } from 'lucide-react'
+import { Card, CardHeader, Meter } from './ui'
 
-export default function MaterialCard({ material }) {
-  if (!material) return null
+/**
+ * The material the flame colour matched, with the three strongest alternatives.
+ *
+ * For an image the match comes from the same `POST /analyze` call; for a video it
+ * comes from the deterministic `POST /material-identification` endpoint, which
+ * returns the same structure. Either way the backend decides - the client's only
+ * job is to show its answer.
+ *
+ * When that endpoint could not answer, the caller passes `unavailable` and this
+ * renders a single compact line. No material is invented to fill the card.
+ */
+export default function MaterialCard({ material, unavailable = false, className = '' }) {
+  const title = material?.title ?? 'Material Identification'
 
-  const { name, similarity, alternatives, databaseNotes, scoreBasis } = material
+  if (!material) {
+    if (!unavailable) return null
+
+    return (
+      <Card className={`result-card material-card ${className}`.trim()}>
+        <CardHeader icon={Boxes} title={title} tone="neutral" />
+        <p className="ai-unavailable">Material identification unavailable</p>
+      </Card>
+    )
+  }
+
+  const { name, similarity, similarityRatio, alternatives, hasAlternatives } = material
 
   return (
-    <Card className="result-card material-card">
-      <header className="card__header">
-        <div className="card__header-main">
-          <Boxes size={15} strokeWidth={1.75} aria-hidden="true" />
-          <h3 className="card__title">Material Identification</h3>
-        </div>
-      </header>
+    <Card className={`result-card material-card ${className}`.trim()}>
+      <CardHeader icon={Boxes} title={title} />
 
-      <div className="material-primary">
-        <p className="material-primary__name">{name}</p>
-        <p className="material-primary__sim is-mono">
-          {similarity !== null ? formatPercent(similarity) : '--'}
-          {similarity !== null ? <span> similarity</span> : null}
-        </p>
-        {similarity !== null ? (
-          <div className="confidence">
-            <Meter value={similarity} label={`Material similarity ${formatPercent(similarity)}`} tone="cyan" />
-          </div>
+      <div className="material">
+        <p className="material__name">{name}</p>
+        {similarity ? (
+          <p className="material__similarity is-mono">
+            {similarity}
+            <span className="material__similarity-label"> match</span>
+          </p>
+        ) : null}
+        {similarityRatio !== null && similarityRatio !== undefined ? (
+          <Meter
+            value={similarityRatio}
+            label={`Material match similarity ${similarity}`}
+            tone="cyan"
+          />
         ) : null}
       </div>
 
-      {alternatives.length > 0 ? (
+      {hasAlternatives ? (
         <div className="subsection">
           <p className="subsection__title">
-            <Layers size={13} strokeWidth={1.75} aria-hidden="true" />
-            Alternative Matches
+            <Layers size={12} strokeWidth={1.75} aria-hidden="true" />
+            Alternative matches
           </p>
           <ol className="alts">
-            {alternatives.map((alt, index) => (
-              <li className="alt" key={`${alt.name}-${index}`}>
-                <span className="alt__rank is-mono">{String(index + 1).padStart(2, '0')}</span>
+            {alternatives.map((alt) => (
+              <li className="alt" key={`${alt.name}-${alt.rank}`}>
+                <span className="alt__rank is-mono">{alt.label}</span>
                 <span className="alt__name">{alt.name}</span>
-                <span className="alt__sim is-mono">{formatPercent(alt.similarity) ?? '--'}</span>
+                <span className="alt__sim is-mono">{alt.similarity ?? '--'}</span>
               </li>
             ))}
           </ol>
         </div>
       ) : null}
-
-      {databaseNotes || scoreBasis ? (
-        <div className="notes">
-          {databaseNotes ? (
-            <p className="notes__row">
-              <Info size={12} strokeWidth={1.75} aria-hidden="true" />
-              <span>{databaseNotes}</span>
-            </p>
-          ) : null}
-          {scoreBasis ? (
-            <p className="notes__row">
-              <Info size={12} strokeWidth={1.75} aria-hidden="true" />
-              <span>
-                <span className="notes__key">Score basis: </span>
-                {scoreBasis}
-              </span>
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
-      <PanelNote>Matches are returned by the backend model and are shown without modification.</PanelNote>
     </Card>
   )
 }

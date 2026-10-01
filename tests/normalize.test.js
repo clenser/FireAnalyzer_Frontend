@@ -582,14 +582,27 @@ test('malformed matches are dropped without crashing', () => {
         42,
         'nope',
         { rank: 1 },
-        { material: 'No Rank' },
-        { rank: 2, material: 'Valid Match', confidence_percent: 12.5, reason: 'ok' },
+        { rank: 3, material: 'Valid Match', confidence_percent: 12.5, reason: 'ok' },
+        { rank: 2, material: 'Second', confidence_percent: 4 },
       ],
     }),
   )
+  assert.equal(result.matches.length, 2, 'both named matches survive')
+  assert.deepEqual(
+    result.matches.map((match) => [match.rank, match.material]),
+    [
+      [2, 'Second'],
+      [3, 'Valid Match'],
+    ],
+  )
+})
+
+test('a match with no rank keeps its position in the payload', () => {
+  const result = normaliseAiMaterialAnalysis(
+    aiPayload({ matches: [{ material: 'No Rank', confidence_percent: 10 }] }),
+  )
   assert.equal(result.matches.length, 1)
-  assert.equal(result.matches[0].material, 'Valid Match')
-  assert.equal(result.matches[0].rank, 2)
+  assert.equal(result.matches[0].rank, 1)
 })
 
 test('invalid confidence becomes null, never NaN or undefined', () => {
@@ -607,13 +620,39 @@ test('invalid confidence becomes null, never NaN or undefined', () => {
   assert.equal(missing.matches[0].confidencePercent, null)
 })
 
-test('invalid rank drops the match entirely', () => {
+test('an unusable rank falls back to the position in the ranked payload', () => {
   const result = normaliseAiMaterialAnalysis(
     aiPayload({
-      matches: [{ rank: 'one', material: 'X', confidence_percent: 10 }],
+      matches: [
+        { rank: 'one', material: 'X', confidence_percent: 10 },
+        { rank: 2, material: 'Y', confidence_percent: 20 },
+      ],
     }),
   )
-  assert.deepEqual(result.matches, [])
+  assert.deepEqual(
+    result.matches.map((match) => [match.rank, match.material]),
+    [
+      [1, 'X'],
+      [2, 'Y'],
+    ],
+    'the nameless rank is recovered from the entry position',
+  )
+})
+
+test('a match without a material name is dropped whatever its rank', () => {
+  const result = normaliseAiMaterialAnalysis(
+    aiPayload({
+      matches: [
+        { rank: 1 },
+        { rank: 2, material: '   ' },
+        { rank: 3, material: 'X', confidence_percent: 10 },
+      ],
+    }),
+  )
+  assert.deepEqual(
+    result.matches.map((match) => match.material),
+    ['X'],
+  )
 })
 
 test('missing reason becomes null rather than undefined', () => {
