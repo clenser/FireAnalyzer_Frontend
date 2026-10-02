@@ -47,6 +47,10 @@ export default function useVideoAnalysis() {
   const [stageIndex, setStageIndex] = useState(0)
   const [startedAt, setStartedAt] = useState(null)
   const [forceNewAnalysis, setForceNewAnalysis] = useState(false)
+  // The flag actually used by the last completed request, captured at request
+  // time so a later toggle change can never relabel a result that already came
+  // back.
+  const [wasForced, setWasForced] = useState(false)
 
   const abortRef = useRef(null)
   const stageTimerRef = useRef(null)
@@ -72,6 +76,7 @@ export default function useVideoAnalysis() {
     setError(null)
     setStageIndex(0)
     setStartedAt(null)
+    setWasForced(false)
   }, [])
 
   const clear = useCallback(() => {
@@ -136,6 +141,7 @@ export default function useVideoAnalysis() {
     resetRunState()
     setStartedAt(runStartedAt)
     setStageIndex(0)
+    setWasForced(forceNewAnalysis)
 
     clearStageTimer()
     stageTimerRef.current = setInterval(() => {
@@ -170,6 +176,7 @@ export default function useVideoAnalysis() {
     currentStage: VIDEO_STAGES[stageIndex] ?? VIDEO_STAGES[0],
     forceNewAnalysis,
     setForceNewAnalysis,
+    wasForced,
     isAnalyzing: status === VIDEO_STATUS.analyzing,
     isLoading: status === VIDEO_STATUS.loading,
     isBusy: status === VIDEO_STATUS.analyzing || status === VIDEO_STATUS.loading,

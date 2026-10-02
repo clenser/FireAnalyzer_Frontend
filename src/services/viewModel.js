@@ -100,16 +100,40 @@ function buildFlameColorModel(color, { title = 'Mean Flame Color', average = fal
  * single image (`candidate_materials` score shape); a video passes `[]` here
  * and shows its own vote distribution in a separate card instead.
  */
-function buildMaterialModel(material, candidates = [], { title = 'Material Identification' } = {}) {
+function buildMaterialModel(
+  material,
+  candidates = [],
+  { title = 'Material Identification', deterministicEvidence = null, visionEvidence = null } = {},
+) {
   if (!material) return null
 
   if (material.uncertain || !material.finalMaterial) {
+    // No final material was decided. Rather than a single invented answer, or
+    // a frontend-combined ranking, the card shows exactly the two single-source
+    // top matches the fusion engine actually weighed: the deterministic
+    // colour/LAB matcher's #1 and the vision provider's #1 - each with its own
+    // real backend confidence, never recalculated or merged into one list.
+    const topColourEntry = deterministicEvidence?.ranking?.[0] ?? null
+    const topVisionEntry = visionEvidence?.candidates?.[0] ?? null
+    const visionLabel =
+      visionEvidence?.provider && visionEvidence.provider !== 'none' ? titleCase(visionEvidence.provider) : 'AI'
+
+    const topMatches = {
+      colour: topColourEntry
+        ? { label: 'Colour', name: topColourEntry.material, confidence: percent(topColourEntry.similarity) }
+        : null,
+      vision: topVisionEntry
+        ? { label: visionLabel, name: topVisionEntry.material, confidence: percent(topVisionEntry.confidence) }
+        : null,
+    }
+
     return {
       title,
       uncertain: true,
       name: null,
       reasons: material.uncertaintyReasons ?? [],
-      confidenceLevel: material.confidenceLevel ? titleCase(material.confidenceLevel) : null,
+      topMatches,
+      hasTopMatches: Boolean(topMatches.colour || topMatches.vision),
     }
   }
 
@@ -220,12 +244,15 @@ function buildFireClassModel(fireClass, agents, fallbackMaterialName) {
  * analysed image is shown from the uploaded preview with the API's merged
  * flame mask layered on top.
  */
-export function buildImageResultModel({ data, previewUrl, dimensions, measuredDurationMs } = {}) {
+export function buildImageResultModel({ data, previewUrl, dimensions, measuredDurationMs, wasForced = false } = {}) {
   if (!data) return null
 
   const detection = buildDetectionModel(data)
   const flameColor = buildFlameColorModel(data.color)
-  const material = buildMaterialModel(data.material, data.candidates)
+  const material = buildMaterialModel(data.material, data.candidates, {
+    deterministicEvidence: data.deterministicEvidence,
+    visionEvidence: data.visionEvidence,
+  })
   const evidence = buildEvidenceModel(data.deterministicEvidence, data.visionEvidence)
   const ai = buildAiModel(data.aiMaterialAnalysis)
   const fireClass = buildFireClassModel(data.fireClass, data.agents, data.material?.finalMaterial)
@@ -245,6 +272,10 @@ export function buildImageResultModel({ data, previewUrl, dimensions, measuredDu
     kind: 'image',
     hasContent,
     cached: data.cached === true,
+    // force_new_analysis always makes the backend bypass its cache, so this is
+    // never true at the same time as `cached` - the two chips are mutually
+    // exclusive, never merged into one ambiguous label.
+    wasForced: wasForced === true,
     flameImage: {
       src: previewUrl ?? null,
       maskUrl,
@@ -313,7 +344,7 @@ function buildDistributionModel(distribution, totalFrames) {
  * the Python majority/consistency vote - nothing is re-aggregated here, and no
  * AI model ever produces a video-level conclusion.
  */
-export function buildVideoResultModel({ data, measuredDurationMs } = {}) {
+export function buildVideoResultModel({ data, measuredDurationMs, wasForced = false } = {}) {
   if (!data) return null
 
   const material = buildMaterialModel(data.material, [])
@@ -334,6 +365,7 @@ export function buildVideoResultModel({ data, measuredDurationMs } = {}) {
     kind: 'video',
     hasContent,
     cached: data.cached === true,
+    wasForced: wasForced === true,
     gallery: representative,
     allFrames,
     summary: {

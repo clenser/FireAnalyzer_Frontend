@@ -23,8 +23,11 @@ import SuppressionCard, { DurationNote } from './SuppressionCard'
  * cannot justify - the material card when the result is uncertain, the
  * distribution card with nothing to show - is omitted rather than padded out.
  */
-export default function VideoAnalysisResult({ data, durationMs }) {
-  const model = useMemo(() => buildVideoResultModel({ data, measuredDurationMs: durationMs }), [data, durationMs])
+export default function VideoAnalysisResult({ data, durationMs, wasForced }) {
+  const model = useMemo(
+    () => buildVideoResultModel({ data, measuredDurationMs: durationMs, wasForced }),
+    [data, durationMs, wasForced],
+  )
 
   if (!model?.hasContent) {
     return <p className="results__none">No analysis results were returned for this video.</p>
@@ -55,10 +58,10 @@ export default function VideoAnalysisResult({ data, durationMs }) {
         <SuppressionCard suppression={model.suppression} className="area-class" />
       ) : null}
 
-      {model.duration || model.cached ? (
+      {model.duration || model.cached || model.wasForced ? (
         <Card className="statusbar area-status" aria-label="Analysis status">
           <DurationNote duration={model.duration} />
-          {model.cached ? <Chip tone="neutral">Cached result</Chip> : null}
+          {model.wasForced ? <Chip tone="positive">Fresh analysis</Chip> : model.cached ? <Chip tone="neutral">Cached result</Chip> : null}
         </Card>
       ) : null}
     </div>

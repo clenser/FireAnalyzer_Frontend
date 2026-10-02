@@ -486,6 +486,12 @@ legend {
   margin-top: 12px;
 }
 
+/* The first subsection in a card with no header stat above it needs no extra
+   top margin - the card header's own bottom margin is already the gap. */
+.subsection--first {
+  margin-top: 0;
+}
+
 .subsection__title {
   display: flex;
   align-items: center;
@@ -1421,6 +1427,60 @@ legend {
   line-height: 1.2;
 }
 
+/* ============================================================
+   Top matches (uncertain-material summary)
+   ============================================================ */
+
+/* Exactly two rows: the deterministic colour matcher's #1 and the vision
+   provider's #1, each a distinct evidence source, never merged into one
+   ranking. A compact card-in-card row keeps both legible without the large
+   empty space a half-filled table would leave. */
+.top-matches {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.top-match {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  background: var(--bg-soft);
+}
+
+.top-match__tag {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  padding: 2px 7px;
+  border: 1px solid var(--cyan-line);
+  border-radius: 999px;
+  background: var(--cyan-soft);
+  white-space: nowrap;
+}
+
+.top-match__name {
+  font-size: 13.5px;
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top-match__value {
+  font-size: 13px;
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+
 .material__similarity {
   font-size: 13px;
   color: var(--cyan);
@@ -2083,13 +2143,6 @@ details[open] > .disclosure__summary::before {
 /* ============================================================
    Material uncertain state
    ============================================================ */
-
-.material-uncertain__headline {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-2);
-  margin-bottom: 6px;
-}
 
 .material-uncertain__reasons {
   display: flex;

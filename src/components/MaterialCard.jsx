@@ -31,19 +31,49 @@ export default function MaterialCard({ material, unavailable = false, evidence =
   }
 
   if (material.uncertain) {
+    const { colour, vision } = material.topMatches ?? {}
+
     return (
       <Card className={`result-card material-card ${className}`.trim()}>
-        <CardHeader icon={Boxes} title={title} tone="neutral" meta={material.confidenceLevel} />
-        <p className="material-uncertain__headline">Material uncertain</p>
-        {material.reasons?.length ? (
-          <ul className="material-uncertain__reasons">
-            {material.reasons.map((reason) => (
-              <li key={reason}>{reason}</li>
-            ))}
-          </ul>
+        <CardHeader icon={Boxes} title={title} tone="neutral" />
+
+        {material.hasTopMatches ? (
+          <div className="subsection subsection--first">
+            <p className="subsection__title">Top Matches</p>
+            <ul className="top-matches">
+              {colour ? (
+                <li className="top-match">
+                  <span className="top-match__tag">{colour.label}</span>
+                  <span className="top-match__name">{colour.name}</span>
+                  <span className="top-match__value is-mono">{colour.confidence ?? '--'}</span>
+                </li>
+              ) : null}
+              {vision ? (
+                <li className="top-match">
+                  <span className="top-match__tag">{vision.label}</span>
+                  <span className="top-match__name">{vision.name}</span>
+                  <span className="top-match__value is-mono">{vision.confidence ?? '--'}</span>
+                </li>
+              ) : null}
+            </ul>
+          </div>
         ) : (
-          <p className="ai-unavailable">The available evidence could not reliably identify a material.</p>
+          <p className="ai-unavailable">No individual evidence source produced a usable top match.</p>
         )}
+
+        <div className="subsection">
+          <p className="subsection__title">Confidence / evidence explanation</p>
+          {material.reasons?.length ? (
+            <ul className="material-uncertain__reasons">
+              {material.reasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="ai-unavailable">The available evidence could not reliably identify a material.</p>
+          )}
+        </div>
+
         {evidence ? <EvidenceDisclosure evidence={evidence} /> : null}
       </Card>
     )

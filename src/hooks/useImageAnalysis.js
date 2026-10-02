@@ -51,6 +51,10 @@ export default function useImageAnalysis() {
   const [error, setError] = useState(null)
   const [startedAt, setStartedAt] = useState(null)
   const [forceNewAnalysis, setForceNewAnalysis] = useState(false)
+  // The flag actually used by the last completed request, captured at request
+  // time so a later toggle change can never relabel a result that already came
+  // back.
+  const [wasForced, setWasForced] = useState(false)
 
   const previewRef = useRef(null)
   const abortRef = useRef(null)
@@ -78,6 +82,7 @@ export default function useImageAnalysis() {
     setDurationMs(null)
     setError(null)
     setStartedAt(null)
+    setWasForced(false)
   }, [revokePreview])
 
   const select = useCallback(
@@ -134,6 +139,7 @@ export default function useImageAnalysis() {
     setError(null)
     setData(null)
     setDurationMs(null)
+    setWasForced(forceNewAnalysis)
 
     try {
       const result = await analyzeImage(file, { signal: controller.signal, forceNewAnalysis })
@@ -165,6 +171,7 @@ export default function useImageAnalysis() {
     startedAt,
     forceNewAnalysis,
     setForceNewAnalysis,
+    wasForced,
     isAnalyzing: status === IMAGE_STATUS.analyzing,
     hasResult: status === IMAGE_STATUS.success,
     select,

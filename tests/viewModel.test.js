@@ -27,6 +27,19 @@ const rawImageResponse = (overrides = {}) => ({
     { material: 'Wood Materials', score: 0.44 },
     { material: 'Paper Products', score: 0.2 },
   ],
+  deterministic_evidence: {
+    available: true,
+    evidence_quality: 'strong',
+    ranking: [
+      { material: 'Cooking Oils', similarity: 0.78 },
+      { material: 'Animal Fats', similarity: 0.61 },
+    ],
+  },
+  vision_evidence: {
+    vision_provider: 'groq',
+    available: true,
+    candidates: [{ material: 'Cooking Oils', confidence: 0.68 }],
+  },
   ai_material_analysis: {
     available: true,
     primary_material: 'Cooking Oils',
@@ -122,6 +135,80 @@ test('an uncertain fusion decision states so and never invents a material', () =
   assert.equal(model.material.uncertain, true)
   assert.equal(model.material.name, null)
   assert.deepEqual(model.material.reasons, ['leading materials are effectively tied: Cooking Oils, Animal Fats'])
+})
+
+test('an uncertain result shows exactly the #1 colour match and the #1 vision match - never a combined ranking', () => {
+  const model = buildImageResultModel({
+    data: imageData({
+      final_material: null,
+      uncertain: true,
+      uncertainty_reasons: ['fused confidence 0.30 is below 0.45'],
+      deterministic_evidence: {
+        available: true,
+        evidence_quality: 'strong',
+        ranking: [
+          { material: 'Cooking Oils', similarity: 0.973 },
+          { material: 'Animal Fats', similarity: 0.6 },
+        ],
+      },
+      vision_evidence: {
+        vision_provider: 'groq',
+        available: true,
+        candidates: [
+          { material: 'Natural Fibers', confidence: 0.8 },
+          { material: 'Wood Materials', confidence: 0.2 },
+        ],
+      },
+    }),
+  })
+
+  assert.equal(model.material.hasTopMatches, true)
+  assert.deepEqual(model.material.topMatches.colour, {
+    label: 'Colour',
+    name: 'Cooking Oils',
+    confidence: '97.3%',
+  })
+  assert.deepEqual(model.material.topMatches.vision, {
+    label: 'Groq',
+    name: 'Natural Fibers',
+    confidence: '80.0%',
+  })
+})
+
+test('a vision provider label is read dynamically from the backend, never hardcoded', () => {
+  const model = buildImageResultModel({
+    data: imageData({
+      final_material: null,
+      uncertain: true,
+      vision_evidence: { vision_provider: 'gemini', available: true, candidates: [{ material: 'Wax Materials', confidence: 0.5 }] },
+    }),
+  })
+  assert.equal(model.material.topMatches.vision.label, 'Gemini')
+})
+
+test('a missing vision result shows only the colour match, never a fabricated AI row', () => {
+  const model = buildImageResultModel({
+    data: imageData({
+      final_material: null,
+      uncertain: true,
+      vision_evidence: { vision_provider: 'none', available: false, candidates: [] },
+    }),
+  })
+  assert.equal(model.material.hasTopMatches, true)
+  assert.ok(model.material.topMatches.colour)
+  assert.equal(model.material.topMatches.vision, null)
+})
+
+test('a cached image result never reports a fresh analysis', () => {
+  const model = buildImageResultModel({ data: imageData({ cached: true }), wasForced: false })
+  assert.equal(model.cached, true)
+  assert.equal(model.wasForced, false)
+})
+
+test('force_new_analysis is surfaced on the model, distinct from a cache hit', () => {
+  const model = buildImageResultModel({ data: imageData({ cached: false }), wasForced: true })
+  assert.equal(model.wasForced, true)
+  assert.equal(model.cached, false)
 })
 
 test('at most three alternative materials are shown', () => {

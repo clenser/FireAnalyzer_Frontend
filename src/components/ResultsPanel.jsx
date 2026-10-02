@@ -73,7 +73,7 @@ function ResultsBody({ mode, image, video, active }) {
 
   if (mode === 'video') {
     if (video.hasResult) {
-      return <VideoAnalysisResult data={video.result} durationMs={video.durationMs} />
+      return <VideoAnalysisResult data={video.result} durationMs={video.durationMs} wasForced={video.wasForced} />
     }
     return <EmptyState mode="video" />
   }
@@ -85,6 +85,7 @@ function ResultsBody({ mode, image, video, active }) {
         previewUrl={image.previewUrl}
         dimensions={image.dimensions}
         durationMs={image.durationMs}
+        wasForced={image.wasForced}
       />
     )
   }

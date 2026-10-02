@@ -25,10 +25,10 @@ import SuppressionCard, { DurationNote } from './SuppressionCard'
  * On a narrow screen the columns flatten into a single one, in reading order:
  * image, detection, material, colour, then the full-width cards below.
  */
-export default function ImageAnalysisResult({ data, previewUrl, dimensions, durationMs }) {
+export default function ImageAnalysisResult({ data, previewUrl, dimensions, durationMs, wasForced }) {
   const model = useMemo(
-    () => buildImageResultModel({ data, previewUrl, dimensions, measuredDurationMs: durationMs }),
-    [data, dimensions, durationMs, previewUrl],
+    () => buildImageResultModel({ data, previewUrl, dimensions, measuredDurationMs: durationMs, wasForced }),
+    [data, dimensions, durationMs, previewUrl, wasForced],
   )
 
   if (!model?.hasContent) {
@@ -52,10 +52,10 @@ export default function ImageAnalysisResult({ data, previewUrl, dimensions, dura
       <FireClassCard fireClass={model.fireClass} />
       {!model.fireClass && model.suppression ? <SuppressionCard suppression={model.suppression} /> : null}
 
-      {model.duration || model.cached ? (
+      {model.duration || model.cached || model.wasForced ? (
         <Card className="statusbar" aria-label="Analysis status">
           <DurationNote duration={model.duration} />
-          {model.cached ? <Chip tone="neutral">Cached result</Chip> : null}
+          {model.wasForced ? <Chip tone="positive">Fresh analysis</Chip> : model.cached ? <Chip tone="neutral">Cached result</Chip> : null}
         </Card>
       ) : null}
     </div>
