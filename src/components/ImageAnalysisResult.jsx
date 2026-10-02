@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { buildImageResultModel } from '../services/viewModel'
-import { Card } from './ui'
+import { Card, Chip } from './ui'
 import FlameImageCard from './FlameImageCard'
 import DetectionCard from './DetectionCard'
 import FlameColorCard from './FlameColorCard'
@@ -12,20 +12,18 @@ import SuppressionCard, { DurationNote } from './SuppressionCard'
 /**
  * The image dashboard, in the one fixed result order:
  *
- *   analyzed image + flame detection -> mean flame colour + material
- *   identification -> AI material analysis (only when confident) -> fire class
- *   -> processing complete
+ *   analyzed image + mean flame colour (left column) beside flame detection +
+ *   material identification (right column) -> AI material analysis (only when
+ *   confident) -> fire class -> processing complete.
  *
- * One grid, not a tall column of cards. The DOM follows the order above on every
- * screen and each card states the grid columns it occupies (`.area-*`): the
- * analyzed picture takes the wider half of the first row with detection beside
- * it, the mean colour and material pair repeat that same column boundary, and
- * everything after them is full width. A card whose partner the data did not
- * produce is marked `is-solo` and takes the whole row rather than leaving half
- * of it blank.
+ * The left and right columns are two independent flex columns, not two halves
+ * of one shared grid row: each is sized only by its own content, so a short
+ * Flame Detection card sits directly above Material Identification with a
+ * small constant gap, never stranded by the height of the analysed image
+ * beside it. See `.results-main` / `.results-cols` in index.css.
  *
- * Every card renders at its natural height, and the AI card is absent unless its
- * confidence clears the display threshold.
+ * On a narrow screen the columns flatten into a single one, in reading order:
+ * image, detection, material, colour, then the full-width cards below.
  */
 export default function ImageAnalysisResult({ data, previewUrl, dimensions, durationMs }) {
   const model = useMemo(
@@ -37,26 +35,27 @@ export default function ImageAnalysisResult({ data, previewUrl, dimensions, dura
     return <p className="results__none">No analysis results were returned for this image.</p>
   }
 
-  const imageClass = model.detection ? 'area-image' : 'area-image is-solo'
-  const detectionClass = model.flameImage?.src ? 'area-detection' : 'area-detection is-solo'
-  const colorClass = model.material ? 'area-color' : 'area-color is-solo'
-  const materialClass = model.flameColor ? 'area-material' : 'area-material is-solo'
-
   return (
-    <div className="result-grid result-grid--image">
-      <FlameImageCard image={model.flameImage} className={imageClass} />
-      <DetectionCard detection={model.detection} className={detectionClass} />
-      <FlameColorCard color={model.flameColor} className={colorClass} />
-      <MaterialCard material={model.material} className={materialClass} />
-      <AiMaterialCard ai={model.ai} className="area-ai" />
-      <FireClassCard fireClass={model.fireClass} className="area-class" />
-      {!model.fireClass && model.suppression ? (
-        <SuppressionCard suppression={model.suppression} className="area-class" />
-      ) : null}
+    <div className="results-main">
+      <div className="results-cols">
+        <div className="results-col results-col--left">
+          <FlameImageCard image={model.flameImage} className="area-image" />
+          <FlameColorCard color={model.flameColor} className="area-color" />
+        </div>
+        <div className="results-col results-col--right">
+          <DetectionCard detection={model.detection} className="area-detection" />
+          <MaterialCard material={model.material} evidence={model.evidence} className="area-material" />
+        </div>
+      </div>
 
-      {model.duration ? (
-        <Card className="statusbar area-status" aria-label="Analysis status">
+      <AiMaterialCard ai={model.ai} />
+      <FireClassCard fireClass={model.fireClass} />
+      {!model.fireClass && model.suppression ? <SuppressionCard suppression={model.suppression} /> : null}
+
+      {model.duration || model.cached ? (
+        <Card className="statusbar" aria-label="Analysis status">
           <DurationNote duration={model.duration} />
+          {model.cached ? <Chip tone="neutral">Cached result</Chip> : null}
         </Card>
       ) : null}
     </div>

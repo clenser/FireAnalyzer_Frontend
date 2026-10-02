@@ -36,9 +36,7 @@ test('a video failure always names a next step', () => {
   const cases = [
     ['UNSUPPORTED', /not supported/i, /mp4|webm/i],
     ['METADATA_FAILED', /could not be read/i, /different|supported/i],
-    ['NO_FRAMES', /no frames/i, /different/i],
-    ['BACKEND_UNAVAILABLE', /not available/i, /online|wait/i],
-    ['INSUFFICIENT_FRAMES', /not enough valid frames/i, null],
+    ['NO_FRAMES', /no readable picture data/i, /different/i],
   ]
 
   for (const [code, expected, recovery] of cases) {

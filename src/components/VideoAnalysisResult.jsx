@@ -1,78 +1,64 @@
 import { useMemo } from 'react'
 import { buildVideoResultModel } from '../services/viewModel'
-import { REPRESENTATIVE_FRAME_COUNT } from '../config'
-import { Card } from './ui'
+import { Card, Chip } from './ui'
 import AnalyzedFrameGallery from './AnalyzedFrameGallery'
+import AllFramesDisclosure from './AllFramesDisclosure'
 import VideoSummaryCard from './VideoSummaryCard'
 import DetectionCard from './DetectionCard'
-import FlameColorCard from './FlameColorCard'
 import MaterialCard from './MaterialCard'
-import AiMaterialCard from './AiMaterialCard'
+import MaterialDistributionCard from './MaterialDistributionCard'
 import FireClassCard from './FireClassCard'
 import SuppressionCard, { DurationNote } from './SuppressionCard'
 
 /**
  * The video dashboard, in the one fixed result order:
  *
- *   analyzed frames -> video summary -> flame detection + average flame colour
- *   -> material identification -> AI material analysis (only when confident)
- *   -> fire class -> processing complete
+ *   representative frames -> view all analyzed frames -> video summary ->
+ *   flame detection -> material identification -> material distribution ->
+ *   fire class -> processing complete
  *
- * The DOM follows that order on every screen and each card states the grid
- * columns it occupies (`.area-*`), so placement is deterministic rather than
- * left to auto-placement: full width, full width, a half-width pair, then full
- * width for everything that follows. A pair card whose partner the data did not
- * produce is marked `is-solo` and takes the whole row instead of leaving half of
- * it blank.
- *
- * Every card renders at its natural height, and a card the data cannot justify -
- * the AI card below the confidence threshold, the material card when the
- * deterministic endpoint could not answer - is omitted rather than padded out.
+ * The consolidated material, confidence and fire class are the backend's own
+ * Python majority/consistency vote over the per-frame decisions - never an
+ * AI-generated video conclusion, and never recomputed here. A card the data
+ * cannot justify - the material card when the result is uncertain, the
+ * distribution card with nothing to show - is omitted rather than padded out.
  */
-export default function VideoAnalysisResult({ result, durationMs }) {
-  const model = useMemo(
-    () =>
-      buildVideoResultModel({
-        frames: result?.frames,
-        aggregation: result?.aggregation,
-        materialIdentification: result?.materialIdentification,
-        materialIdentificationFailed: result?.materialIdentificationFailed,
-        videoAi: result?.videoAi,
-        measuredDurationMs: durationMs,
-        selectedFrameCount: result?.selectedFrameCount,
-        representativeCount: REPRESENTATIVE_FRAME_COUNT,
-      }),
-    [durationMs, result],
-  )
+export default function VideoAnalysisResult({ data, durationMs }) {
+  const model = useMemo(() => buildVideoResultModel({ data, measuredDurationMs: durationMs }), [data, durationMs])
 
   if (!model?.hasContent) {
     return <p className="results__none">No analysis results were returned for this video.</p>
   }
 
-  const detectionClass = model.flameColor ? 'area-detection' : 'area-detection is-solo'
-  const colorClass = model.detection ? 'area-color' : 'area-color is-solo'
-
   return (
     <div className="result-grid result-grid--video">
       <AnalyzedFrameGallery frames={model.gallery} className="area-gallery" />
-      <VideoSummaryCard summary={model.summary} className="area-summary" />
-      <DetectionCard detection={model.detection} className={detectionClass} />
-      <FlameColorCard color={model.flameColor} className={colorClass} />
-      <MaterialCard
+
+      {model.allFrames?.length ? (
+        <Card className="result-card all-frames-card area-gallery">
+          <AllFramesDisclosure frames={model.allFrames} />
+        </Card>
+      ) : null}
+
+      <VideoSummaryCard
+        summary={model.summary}
         material={model.material}
-        unavailable={model.summary.materialUnavailable}
-        className="area-material"
+        fireClass={model.fireClass}
+        className="area-summary"
       />
-      <AiMaterialCard ai={model.ai} className="area-ai" />
+      <DetectionCard detection={model.detection} className="area-detection is-solo" />
+      <MaterialCard material={model.material} className="area-material is-solo" />
+      <MaterialDistributionCard distribution={model.distribution} className="area-class" />
       <FireClassCard fireClass={model.fireClass} className="area-class" />
 
       {!model.fireClass && model.suppression ? (
         <SuppressionCard suppression={model.suppression} className="area-class" />
       ) : null}
 
-      {model.duration ? (
+      {model.duration || model.cached ? (
         <Card className="statusbar area-status" aria-label="Analysis status">
           <DurationNote duration={model.duration} />
+          {model.cached ? <Chip tone="neutral">Cached result</Chip> : null}
         </Card>
       ) : null}
     </div>

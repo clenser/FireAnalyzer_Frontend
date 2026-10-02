@@ -10,7 +10,7 @@ import { Card, CardHeader, Meter, Stat } from './ui'
 export default function DetectionCard({ detection, className = '' }) {
   if (!detection) return null
 
-  const { detected, statusText, headline, confidence, flameArea } = detection
+  const { detected, statusText, headline, confidence, flameArea, multipleDetections, detections } = detection
 
   return (
     <Card className={`result-card detection-card ${className}`.trim()} data-detected={detected ? 'true' : 'false'}>
@@ -40,6 +40,21 @@ export default function DetectionCard({ detection, className = '' }) {
           label={`Flame detection confidence ${confidence}`}
           tone={detected ? 'amber' : 'red'}
         />
+      ) : null}
+
+      {multipleDetections && detections?.length ? (
+        <div className="subsection">
+          <p className="subsection__title">Multiple flame regions (merged for analysis)</p>
+          <ol className="alts">
+            {detections.map((entry) => (
+              <li className="alt" key={entry.index}>
+                <span className="alt__rank is-mono">{String(entry.index + 1).padStart(2, '0')}</span>
+                <span className="alt__name">Region {entry.index + 1}</span>
+                <span className="alt__sim is-mono">{entry.confidence ?? '--'}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
       ) : null}
     </Card>
   )

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, test } from 'node:test'
 
-import { ApiError, analyzeImage, checkHealth } from '../src/services/api.js'
+import { ApiError, analyzeImage, analyzeVideo, checkHealth, pingActivity } from '../src/services/api.js'
 import {
   connect,
   configureConnectionManager,
@@ -43,7 +43,6 @@ async function establishApiUrl() {
   configureConnectionManager({
     fetch: connectionFetch,
     pollInterval: 1,
-    heartbeatInterval: 100000,
   })
 
   const ready = new Promise((resolve, reject) => {
@@ -140,10 +139,21 @@ test('a non-JSON error body never leaks raw text into the message', async () => 
 
 const successBody = {
   success: true,
+  cached: false,
+  detection_count: 1,
   fire_detection: { detected: true, confidence: 0.88 },
-  flame_analysis: { mean_flame_color: { rgb: [220, 120, 30] } },
-  material_analysis: { primary_material: 'Cooking Oils', similarity: 0.8 },
-  ai_material_analysis: { available: true, matches: [{ rank: 1, material: 'Cooking Oils' }] },
+  detections: [{ index: 0, confidence: 0.88 }],
+  flame_analysis: { mean_color: { rgb: [220, 120, 30] } },
+  final_material: 'Cooking Oils',
+  confidence: 0.8,
+  confidence_percent: 80,
+  confidence_level: 'high',
+  uncertain: false,
+  candidate_materials: [{ material: 'Cooking Oils', score: 0.8 }],
+  ai_material_analysis: {
+    available: true,
+    matches: [{ rank: 1, material: 'Cooking Oils', confidence_percent: 80 }],
+  },
   fire_class: { class: 'K' },
 }
 
@@ -165,8 +175,18 @@ test('an image is posted to /analyze on the discovered URL as multipart form dat
   )
 
   assert.equal(result.data.detection.detected, true)
-  assert.equal(result.data.material.name, 'Cooking Oils')
+  assert.equal(result.data.material.finalMaterial, 'Cooking Oils')
   assert.ok(result.durationMs >= 0)
+})
+
+test('force_new_analysis is sent as a form field only when requested', async () => {
+  const calls = respondWith({ body: successBody })
+
+  await analyzeImage(pngFile())
+  assert.equal(calls[0].options.body.has('force_new_analysis'), false)
+
+  await analyzeImage(pngFile(), { forceNewAnalysis: true })
+  assert.equal(calls[1].options.body.get('force_new_analysis'), 'true')
 })
 
 test('the measured duration covers the body, not just the headers', async () => {
@@ -273,12 +293,58 @@ test('a response that lands after cancellation is discarded', async () => {
   )
 })
 
-test('a video frame file goes through the exact same image call', async () => {
-  const calls = respondWith({ body: successBody })
-  const frame = new File([new Uint8Array([9, 9, 9])], 'frame-001.jpg', { type: 'image/jpeg' })
+/* -------------------------------- analyze-video -------------------------------- */
 
-  const result = await analyzeImage(frame)
+const videoSuccessBody = {
+  success: true,
+  cached: false,
+  video: { frame_count: 120, fps: 24, duration_seconds: 5, frames_sampled: 12 },
+  frames_with_flame: 10,
+  final_material: 'Wood Materials',
+  confidence: 0.7,
+  confidence_percent: 70,
+  confidence_level: 'medium',
+  uncertain: false,
+  candidate_materials: [{ material: 'Wood Materials', frames: 10, mean_confidence: 0.7 }],
+  fire_class: { class: 'A' },
+  representative_frames: [],
+  frames: [],
+}
 
-  assert.equal(calls[0].options.body.get('image').name, 'frame-001.jpg')
-  assert.equal(result.data.detection.detected, true)
+const mp4File = () => new File([new Uint8Array([1, 2, 3])], 'fire.mp4', { type: 'video/mp4' })
+
+test('a video is posted to /analyze-video on the discovered URL as multipart form data', async () => {
+  const calls = respondWith({ body: videoSuccessBody })
+
+  const result = await analyzeVideo(mp4File())
+
+  assert.equal(calls[0].url, `${API_URL}/analyze-video`)
+  assert.equal(calls[0].options.method, 'POST')
+  assert.equal(calls[0].options.body.get('video').name, 'fire.mp4')
+  assert.equal(result.data.material.finalMaterial, 'Wood Materials')
+  assert.equal(result.data.video.framesSampled, 12)
+})
+
+test('analyzeVideo also supports force_new_analysis', async () => {
+  const calls = respondWith({ body: videoSuccessBody })
+
+  await analyzeVideo(mp4File(), { forceNewAnalysis: true })
+
+  assert.equal(calls[0].options.body.get('force_new_analysis'), 'true')
+})
+
+/* --------------------------------- activity -------------------------------- */
+
+test('pingActivity never throws, even on failure', async () => {
+  respondWith({ status: 500, body: null })
+  const ok = await pingActivity()
+  assert.equal(ok, false)
+})
+
+test('pingActivity posts to /activity on the discovered URL', async () => {
+  const calls = respondWith({ body: { status: 'active' } })
+  const ok = await pingActivity()
+  assert.equal(calls[0].url, `${API_URL}/activity`)
+  assert.equal(calls[0].options.method, 'POST')
+  assert.equal(ok, true)
 })

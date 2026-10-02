@@ -1,5 +1,6 @@
 import { ImageIcon, Video } from 'lucide-react'
-import { Card } from './ui'
+import { Card, Toggle } from './ui'
+import { FORCE_NEW_ANALYSIS_HELP } from '../config'
 import ImageUpload from './ImageUpload'
 import VideoUpload from './VideoUpload'
 import AnalyzeButton from './AnalyzeButton'
@@ -58,6 +59,13 @@ export default function AnalysisInput({
             isAnalyzing={image.isAnalyzing}
             validationError={image.validationError}
           >
+            <Toggle
+              checked={image.forceNewAnalysis}
+              onChange={image.setForceNewAnalysis}
+              label="Force New Analysis"
+              help={FORCE_NEW_ANALYSIS_HELP}
+              disabled={image.isAnalyzing}
+            />
             <AnalyzeButton
               onClick={image.run}
               disabled={!image.file || !connectionReady || image.isAnalyzing}
@@ -70,14 +78,18 @@ export default function AnalysisInput({
           <VideoUpload
             file={video.file}
             metadata={video.metadata}
-            frameCount={video.frameCount}
-            estimate={video.estimate}
             onSelect={video.select}
             onClear={video.clear}
-            onFrameCountChange={video.changeFrameCount}
             isBusy={video.isBusy}
             validationError={video.validationError}
           >
+            <Toggle
+              checked={video.forceNewAnalysis}
+              onChange={video.setForceNewAnalysis}
+              label="Force New Analysis"
+              help={FORCE_NEW_ANALYSIS_HELP}
+              disabled={video.isBusy}
+            />
             <AnalyzeButton
               onClick={video.run}
               disabled={!video.file || !connectionReady || video.isBusy}

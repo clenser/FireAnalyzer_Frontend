@@ -50,7 +50,6 @@ beforeEach(() => {
   resetConnectionManager()
   configureConnectionManager({
     pollInterval: 1,
-    heartbeatInterval: 1,
   })
 })
 
@@ -183,8 +182,7 @@ test('health check fails → retries until ready', async () => {
   assert.ok(healthCallCount >= 3, `Expected at least 3 health calls, got ${healthCallCount}`)
 })
 
-test('heartbeat starts after backend readiness', async () => {
-  const activityCalls = []
+test('disconnect tears down the connection', async () => {
   configureConnectionManager({
     fetch: createMockFetch((url) => {
       if (url.includes('lambda-url')) {
@@ -198,10 +196,6 @@ test('heartbeat starts after backend readiness', async () => {
       if (url.includes('/health')) {
         return createResponse({ status: 'ok', device: 'cpu' })
       }
-      if (url.includes('/activity')) {
-        activityCalls.push(url)
-        return createResponse({ status: 'active' })
-      }
       return createResponse({})
     }),
   })
@@ -209,47 +203,9 @@ test('heartbeat starts after backend readiness', async () => {
   const readyPromise = waitForState('ready')
   connect()
   await readyPromise
-
-  await new Promise((resolve) => setTimeout(resolve, 10))
-
-  assert.ok(activityCalls.length >= 1, `Expected at least 1 activity call, got ${activityCalls.length}`)
-  assert.ok(activityCalls.every((url) => url.includes('/activity')))
-})
-
-test('heartbeat cleanup on disconnect', async () => {
-  const activityCalls = []
-  configureConnectionManager({
-    fetch: createMockFetch((url) => {
-      if (url.includes('lambda-url')) {
-        return createResponse({
-          instance_id: 'i-123',
-          state: 'running',
-          public_ip: '1.2.3.4',
-          api_url: 'http://1.2.3.4',
-        })
-      }
-      if (url.includes('/health')) {
-        return createResponse({ status: 'ok', device: 'cpu' })
-      }
-      if (url.includes('/activity')) {
-        activityCalls.push(url)
-        return createResponse({ status: 'active' })
-      }
-      return createResponse({})
-    }),
-  })
-
-  const readyPromise = waitForState('ready')
-  connect()
-  await readyPromise
-
-  await new Promise((resolve) => setTimeout(resolve, 10))
-  const callsBeforeDisconnect = activityCalls.length
 
   disconnect()
-  await new Promise((resolve) => setTimeout(resolve, 10))
 
-  assert.equal(activityCalls.length, callsBeforeDisconnect)
   assert.equal(getConnectionState(), 'starting')
   assert.equal(getApiUrl(), null)
 })
@@ -278,46 +234,6 @@ test('dynamic api_url usage', async () => {
 
   assert.equal(getApiUrl(), 'http://5.6.7.8')
   assert.equal(getConnectionState(), 'ready')
-})
-
-test('wake/reconnect after heartbeat failure', async () => {
-  let activityCallCount = 0
-  let lambdaCallCount = 0
-  configureConnectionManager({
-    fetch: createMockFetch((url) => {
-      if (url.includes('lambda-url')) {
-        lambdaCallCount++
-        return createResponse({
-          instance_id: 'i-123',
-          state: 'running',
-          public_ip: '1.2.3.4',
-          api_url: 'http://1.2.3.4',
-        })
-      }
-      if (url.includes('/health')) {
-        return createResponse({ status: 'ok', device: 'cpu' })
-      }
-      if (url.includes('/activity')) {
-        activityCallCount++
-        if (activityCallCount === 1) {
-          return createResponse({ error: 'connection refused' }, 500)
-        }
-        return createResponse({ status: 'active' })
-      }
-      return createResponse({})
-    }),
-  })
-
-  const readyPromise = waitForState('ready')
-  connect()
-  await readyPromise
-
-  await waitForState('unavailable')
-  await waitForState('ready')
-
-  assert.ok(lambdaCallCount >= 2, `Expected at least 2 Lambda calls, got ${lambdaCallCount}`)
-  assert.equal(getConnectionState(), 'ready')
-  assert.equal(getApiUrl(), 'http://1.2.3.4')
 })
 
 test('Lambda error → unavailable → retry', async () => {

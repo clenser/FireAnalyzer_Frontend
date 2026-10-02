@@ -4,20 +4,18 @@ import { ImageCanvas } from './ImageCanvas'
 import { formatTimestamp } from '../utils/format'
 
 /**
- * The two or three representative analyzed frames.
- *
- * Every sampled frame is analyzed, but only a small spread is shown - the rest are
- * counted in the video summary, so this card carries no explanation of its own:
- * the heading is plain and each tile states its own frame number, timestamp and
- * outcome. The tiles are equal width and fill the row; on a phone they stay on
- * one line and the strip, never the page, scrolls sideways.
+ * The backend's own representative frames (up to 3, already chosen server-side -
+ * never re-picked here). Every sampled frame was analysed; the rest are
+ * available in "View all analyzed frames" below. Each tile carries its own
+ * material/fire-class result, since the merged mask is per frame, not a single
+ * image-wide answer.
  */
 export default function AnalyzedFrameGallery({ frames, className = '' }) {
   if (!frames?.length) return null
 
   return (
     <Card className={`result-card gallery ${className}`.trim()}>
-      <CardHeader icon={Images} title="Analyzed Frames" />
+      <CardHeader icon={Images} title="Representative Frames" />
 
       <ul className="gallery__track">
         {frames.map((frame) => (
@@ -36,8 +34,21 @@ export default function AnalyzedFrameGallery({ frames, className = '' }) {
               </p>
               <div className="gallery__tags">
                 <Chip tone={frame.detected ? 'positive' : 'neutral'}>{frame.statusText}</Chip>
-                {frame.hasMask ? <Chip tone="mask">Mask</Chip> : null}
+                {frame.detectionCount > 1 ? <Chip tone="mask">{frame.detectionCount} regions</Chip> : null}
               </div>
+              <p className="gallery__material">
+                {frame.materialUncertain ? (
+                  <span className="is-muted">Material uncertain</span>
+                ) : frame.materialName ? (
+                  <>
+                    {frame.materialName}
+                    {frame.confidence ? <span className="is-mono"> · {frame.confidence}</span> : null}
+                  </>
+                ) : (
+                  <span className="is-muted">No material result</span>
+                )}
+              </p>
+              {frame.fireClassName ? <p className="gallery__fireclass is-mono">{frame.fireClassName}</p> : null}
             </div>
           </li>
         ))}

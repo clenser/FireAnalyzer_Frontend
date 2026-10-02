@@ -1,17 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { analyzeImage } from '../services/api.js'
-import { getAverageRequestDurationMs } from '../services/performanceStore.js'
-import { runVideoWorkflow } from '../services/videoWorkflow.js'
-import { estimateRemainingDuration, estimateVideoDuration } from '../utils/estimate.js'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { analyzeVideo } from '../services/api.js'
+import { notifyActivity } from '../services/activityHeartbeat.js'
 import { validateVideoFile } from '../utils/validateFile.js'
-import {
-  describeVideoError,
-  extractFrames,
-  generateRandomTimestamps,
-  loadVideoSource,
-  resolveFrameCount,
-} from '../utils/videoFrames.js'
-import { DEFAULT_FRAME_COUNT } from '../config.js'
+import { describeVideoError, loadVideoSource } from '../utils/videoFrames.js'
 
 export const VIDEO_STATUS = {
   idle: 'idle',
@@ -22,6 +13,15 @@ export const VIDEO_STATUS = {
   error: 'error',
 }
 
+/** Stages shown while the request is in flight - a real timeline, no fake percentage. */
+export const VIDEO_STAGES = [
+  'Preparing video',
+  'Sampling frames',
+  'Analyzing flames',
+  'Building material result',
+  'Finalizing results',
+]
+
 const now = () =>
   typeof performance !== 'undefined' && typeof performance.now === 'function'
     ? performance.now()
@@ -30,88 +30,67 @@ const now = () =>
 /**
  * Video analysis.
  *
- * The pipeline is:
- *
- *   video -> N random timestamps -> N frames -> N x POST /analyze
- *         -> collect successful frame evidence
- *         -> average RGB / LAB
- *         -> POST /material-identification   (deterministic; source of truth)
- *         -> POST /video-material-analysis   (ONE Gemini call, all frame evidence)
- *         -> final results
- *
- * Both extra calls are independent: neither may fail the run. A deterministic
- * failure leaves the material and fire class "unavailable"; a Gemini failure (or
- * a result below the display threshold) simply omits the AI card. The reported
- * duration is the measured wall-clock time of this whole workflow - nothing is
- * estimated or fabricated.
+ * The whole pipeline - frame sampling, per-frame detection/segmentation/colour/
+ * vision evidence, Python fusion and the majority vote - runs server-side in a
+ * single `POST /analyze-video` call. The frontend only reads the file's
+ * duration/resolution locally for display before upload; it never extracts,
+ * encodes or uploads individual frames itself.
  */
 export default function useVideoAnalysis() {
   const [file, setFile] = useState(null)
-  const [source, setSource] = useState(null)
   const [metadata, setMetadata] = useState(null)
-  const [frameCount, setFrameCount] = useState(DEFAULT_FRAME_COUNT)
   const [validationError, setValidationError] = useState(null)
   const [status, setStatus] = useState(VIDEO_STATUS.idle)
   const [result, setResult] = useState(null)
   const [durationMs, setDurationMs] = useState(null)
   const [error, setError] = useState(null)
-  const [progress, setProgress] = useState(null)
-  /** Mean duration of real image requests; feeds the estimate once measured. */
-  const [measuredFrameMs, setMeasuredFrameMs] = useState(null)
+  const [stageIndex, setStageIndex] = useState(0)
+  const [startedAt, setStartedAt] = useState(null)
+  const [forceNewAnalysis, setForceNewAnalysis] = useState(false)
 
-  const sourceRef = useRef(null)
   const abortRef = useRef(null)
-  const frameUrlsRef = useRef([])
+  const stageTimerRef = useRef(null)
 
-  const estimate = useMemo(
-    () => estimateVideoDuration({ frameCount, averageFrameMs: measuredFrameMs }),
-    [frameCount, measuredFrameMs],
-  )
-
-  const releaseFrames = useCallback(() => {
-    for (const url of frameUrlsRef.current) URL.revokeObjectURL(url)
-    frameUrlsRef.current = []
-  }, [])
-
-  const disposeSource = useCallback(() => {
-    sourceRef.current?.dispose?.()
-    sourceRef.current = null
+  const clearStageTimer = useCallback(() => {
+    if (stageTimerRef.current) {
+      clearInterval(stageTimerRef.current)
+      stageTimerRef.current = null
+    }
   }, [])
 
   useEffect(
     () => () => {
       abortRef.current?.abort()
-      releaseFrames()
-      disposeSource()
+      clearStageTimer()
     },
-    [disposeSource, releaseFrames],
+    [clearStageTimer],
   )
 
   const resetRunState = useCallback(() => {
     setResult(null)
     setDurationMs(null)
     setError(null)
-    setProgress(null)
+    setStageIndex(0)
+    setStartedAt(null)
   }, [])
 
   const clear = useCallback(() => {
     abortRef.current?.abort()
     abortRef.current = null
-    releaseFrames()
-    disposeSource()
+    clearStageTimer()
     resetRunState()
 
     setFile(null)
-    setSource(null)
     setMetadata(null)
     setValidationError(null)
     setStatus(VIDEO_STATUS.idle)
-  }, [disposeSource, releaseFrames, resetRunState])
+  }, [clearStageTimer, resetRunState])
 
   const select = useCallback(
     async (candidate) => {
       abortRef.current?.abort()
       abortRef.current = null
+      notifyActivity()
 
       if (!candidate) return null
 
@@ -121,164 +100,82 @@ export default function useVideoAnalysis() {
         return null
       }
 
-      releaseFrames()
-      disposeSource()
       resetRunState()
-
       setFile(null)
-      setSource(null)
       setMetadata(null)
       setValidationError(null)
       setStatus(VIDEO_STATUS.loading)
 
       try {
-        const loaded = await loadVideoSource(candidate)
-        sourceRef.current = loaded
-        setSource(loaded)
-        setMetadata(loaded.metadata)
+        const source = await loadVideoSource(candidate)
+        const videoMetadata = source.metadata
+        source.dispose()
+        setMetadata(videoMetadata)
         setFile(candidate)
         setStatus(VIDEO_STATUS.ready)
-        return loaded
+        return videoMetadata
       } catch (err) {
         setStatus(VIDEO_STATUS.idle)
         setValidationError(describeVideoError(err))
         return null
       }
     },
-    [disposeSource, releaseFrames, resetRunState],
+    [resetRunState],
   )
 
-  const changeFrameCount = useCallback((value) => {
-    setFrameCount(resolveFrameCount(value))
-  }, [])
-
   const run = useCallback(async () => {
-    if (!file || !source) return
+    if (!file) return
     if (status === VIDEO_STATUS.analyzing || status === VIDEO_STATUS.loading) return
+    notifyActivity()
 
     const controller = new AbortController()
     abortRef.current = controller
-    const startedAt = now()
-    const { video, metadata: videoMeta } = source
-    const total = resolveFrameCount(frameCount)
+    const runStartedAt = now()
 
     setStatus(VIDEO_STATUS.analyzing)
     resetRunState()
-    setProgress({ phase: 'extracting', completed: 0, total, timestamp: null, startedAt })
+    setStartedAt(runStartedAt)
+    setStageIndex(0)
 
-    let frames
+    clearStageTimer()
+    stageTimerRef.current = setInterval(() => {
+      setStageIndex((stage) => Math.min(VIDEO_STAGES.length - 1, stage + 1))
+    }, 3500)
+
     try {
-      const timestamps = generateRandomTimestamps(videoMeta.durationSec, total)
-      frames = await extractFrames(video, timestamps, {
-        onFrame: ({ completed, total: extractedTotal, timestamp }) => {
-          setProgress({
-            phase: 'extracting',
-            completed,
-            total: extractedTotal,
-            timestamp,
-            startedAt,
-          })
-        },
-      })
+      const response = await analyzeVideo(file, { signal: controller.signal, forceNewAnalysis })
+      clearStageTimer()
+      setResult(response.data)
+      setDurationMs(response.durationMs)
+      setStatus(VIDEO_STATUS.success)
     } catch (err) {
-      if (controller.signal.aborted) return
-      setProgress(null)
-      setError({ message: describeVideoError(err), code: err?.code ?? null, notice: null })
+      clearStageTimer()
+      if (err?.name === 'AbortError') return
+      setError({ message: err?.message ?? 'Analysis failed.', code: err?.code ?? null, status: err?.status ?? null })
       setStatus(VIDEO_STATUS.error)
-      return
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null
     }
-
-    if (controller.signal.aborted) return
-
-    releaseFrames()
-    frameUrlsRef.current = frames.map((frame) => frame.dataUrl).filter(Boolean)
-    const results = Array.from({ length: frames.length }, () => null)
-
-    for (const [position, frame] of frames.entries()) {
-      if (controller.signal.aborted) return
-      if (!frame.file) {
-        results[position] = { ok: false, error: 'frame-extraction-failed' }
-        continue
-      }
-      try {
-        const response = await analyzeImage(frame.file, { signal: controller.signal })
-        results[position] = { ok: true, data: response.data, durationMs: response.durationMs }
-      } catch (err) {
-        if (err?.name === 'AbortError' || controller.signal.aborted) return
-        results[position] = { ok: false, error: err?.message ?? 'frame-failed' }
-      }
-      setProgress({
-        phase: 'analyzing',
-        completed: position + 1,
-        total: frames.length,
-        timestamp: frame.timestamp,
-        startedAt,
-      })
-    }
-
-    const { aggregation, insufficientFrames, materialIdentification, materialIdentificationFailed, videoAi } =
-      await runVideoWorkflow({
-        frames,
-        results,
-        signal: controller.signal,
-      })
-
-    if (controller.signal.aborted) return
-    setMeasuredFrameMs(getAverageRequestDurationMs())
-
-    if (insufficientFrames) {
-      setProgress(null)
-      setDurationMs(now() - startedAt)
-      setError({
-        message: describeVideoError({ code: 'INSUFFICIENT_FRAMES' }),
-        code: 'INSUFFICIENT_FRAMES',
-        notice: `${aggregation.framesSucceeded} of ${aggregation.framesAnalyzed} frames analyzed successfully`,
-      })
-      setStatus(VIDEO_STATUS.error)
-      return
-    }
-
-    setDurationMs(now() - startedAt)
-    setResult({
-      frames,
-      aggregation,
-      materialIdentification,
-      materialIdentificationFailed,
-      videoAi,
-      selectedFrameCount: total,
-    })
-    setProgress(null)
-    setStatus(VIDEO_STATUS.success)
-  }, [file, frameCount, resetRunState, releaseFrames, source, status])
-
-  const remainingFrames =
-    progress && progress.total > progress.completed ? progress.total - progress.completed : estimate.frameCount
-
-  const estimatedRemainingMs = useMemo(
-    () =>
-      estimateRemainingDuration({ framesRemaining: remainingFrames, perFrameMs: estimate.perFrameMs }),
-    [estimate.perFrameMs, remainingFrames],
-  )
+  }, [file, status, forceNewAnalysis, resetRunState, clearStageTimer])
 
   return {
     file,
     metadata,
-    frameCount,
     validationError,
     status,
     result,
     durationMs,
     error,
-    progress,
-    estimate,
-    estimatedRemainingMs,
+    startedAt,
+    currentStage: VIDEO_STAGES[stageIndex] ?? VIDEO_STAGES[0],
+    forceNewAnalysis,
+    setForceNewAnalysis,
     isAnalyzing: status === VIDEO_STATUS.analyzing,
     isLoading: status === VIDEO_STATUS.loading,
     isBusy: status === VIDEO_STATUS.analyzing || status === VIDEO_STATUS.loading,
     hasResult: status === VIDEO_STATUS.success,
     select,
     clear,
-    changeFrameCount,
     run,
   }
 }

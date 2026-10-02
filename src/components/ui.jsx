@@ -102,6 +102,39 @@ export function IndeterminateBar({ label }) {
   )
 }
 
+/**
+ * A compact on/off switch, used for Force New Analysis. Deliberately small and
+ * unobtrusive - a label, the switch itself, and an optional one-line help text
+ * shown as a native tooltip so it never crowds the control.
+ */
+export function Toggle({ checked, onChange, label, help, disabled = false }) {
+  return (
+    <label className="toggle" data-disabled={disabled ? 'true' : 'false'} title={help}>
+      <input
+        type="checkbox"
+        className="toggle__input"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span className="toggle__track" aria-hidden="true">
+        <span className="toggle__thumb" />
+      </span>
+      <span className="toggle__label">{label}</span>
+    </label>
+  )
+}
+
+/** A compact expandable section (native <details>), used for secondary detail. */
+export function Disclosure({ summary, children, className = '' }) {
+  return (
+    <details className={`disclosure ${className}`.trim()}>
+      <summary className="disclosure__summary">{summary}</summary>
+      <div className="disclosure__body">{children}</div>
+    </details>
+  )
+}
+
 /** Small colour swatch for a reported RGB value. */
 export function Swatch({ css, label }) {
   return (

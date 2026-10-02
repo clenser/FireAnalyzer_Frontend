@@ -1,15 +1,15 @@
-import { CircleAlert, Film } from 'lucide-react'
+import { Film } from 'lucide-react'
 import { Card, CardHeader, Stat } from './ui'
 
 /**
- * The video's overall outcome, as three counts side by side: how many frames were
- * analyzed, how many showed a flame, and how many could not be read. Nothing
- * else - the numbers are the summary, and every card below explains itself.
+ * The video's overall outcome: how many frames were sampled, how many showed a
+ * flame, and the backend's own deterministic material/fire-class/confidence -
+ * the Python majority vote, never an AI-generated conclusion.
  */
-export default function VideoSummaryCard({ summary, className = '' }) {
+export default function VideoSummaryCard({ summary, material, fireClass, className = '' }) {
   if (!summary) return null
 
-  const { analyzedFrames, failedFrames, flameFrameText, anyFlame, reliable } = summary
+  const { framesSampled, flameFrameText, anyFlame } = summary
 
   return (
     <Card className={`result-card video-summary ${className}`.trim()}>
@@ -21,17 +21,14 @@ export default function VideoSummaryCard({ summary, className = '' }) {
       />
 
       <div className="video-summary__stats">
-        <Stat label="Frames analyzed" value={String(analyzedFrames)} />
+        <Stat label="Frames sampled" value={String(framesSampled)} />
         <Stat label="Frames with flame" value={flameFrameText} />
-        <Stat label="Frames failed" value={String(failedFrames)} tone={failedFrames > 0 ? 'warn' : null} />
+        <Stat
+          label="Final material"
+          value={material && !material.uncertain ? material.name : 'Uncertain'}
+        />
+        <Stat label="Fire class" value={fireClass?.name ?? '--'} />
       </div>
-
-      {reliable ? null : (
-        <p className="video-summary__warning" role="alert">
-          <CircleAlert size={13} strokeWidth={1.75} aria-hidden="true" />
-          <span>Not enough valid frames to produce a reliable result.</span>
-        </p>
-      )}
     </Card>
   )
 }

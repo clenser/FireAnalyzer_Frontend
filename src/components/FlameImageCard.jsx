@@ -16,7 +16,7 @@ import { ImageCanvas } from './ImageCanvas'
 export default function FlameImageCard({ image, className = '' }) {
   if (!image?.src) return null
 
-  const { detected, hasMask, label } = image
+  const { detected, hasMask, label, regionsText } = image
 
   return (
     <Card className={`result-card flame-image ${className}`.trim()}>
@@ -38,6 +38,7 @@ export default function FlameImageCard({ image, className = '' }) {
       <div className="flame-image__footer">
         <div className="flame-image__tags">
           {hasMask ? <Chip tone="mask">Flame region</Chip> : null}
+          {regionsText ? <Chip tone="positive">{regionsText}</Chip> : null}
         </div>
       </div>
     </Card>

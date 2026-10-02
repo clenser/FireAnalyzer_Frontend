@@ -5,6 +5,7 @@ import ResultsPanel from './components/ResultsPanel'
 import useBackendConnection from './hooks/useBackendConnection'
 import useImageAnalysis from './hooks/useImageAnalysis'
 import useVideoAnalysis from './hooks/useVideoAnalysis'
+import useActivityTracking from './hooks/useActivityTracking'
 
 /**
  * App entry. The layout is intentionally simple: a fixed header, then a primary
@@ -17,6 +18,7 @@ export default function App() {
   const { connectionState, health, connectionReady, connectionMessage } = useBackendConnection()
   const image = useImageAnalysis()
   const video = useVideoAnalysis()
+  useActivityTracking()
 
   const handleModeChange = (next) => {
     if (next === mode) return

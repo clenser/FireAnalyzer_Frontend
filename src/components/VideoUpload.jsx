@@ -1,23 +1,20 @@
 import { useRef, useState } from 'react'
 import { FileVideo, LoaderCircle, TriangleAlert, Upload, X } from 'lucide-react'
 import { ACCEPT_VIDEO_ATTRIBUTE, VIDEO_SUPPORTED_DETAIL } from '../config'
-import { formatApproxSeconds, formatBytes, formatDurationRange, formatTimestamp } from '../utils/format'
-import { describeEstimateBasis } from '../utils/estimate'
-import VideoFrameSelector from './VideoFrameSelector'
+import { formatBytes, formatTimestamp } from '../utils/format'
 
 /**
- * Video source selection: dropzone, metadata readout, frame-count choice and a
- * measured time estimate. The panel keeps a fixed maximum height and scrolls
- * internally, so a long clip name or a large frame count cannot stretch it.
+ * Video source selection: dropzone plus a metadata readout. The backend samples
+ * and times the analysis itself, so there is no frame-count control here - only
+ * the file's own duration and resolution, read locally before upload. The panel
+ * keeps a fixed maximum height and scrolls internally, so a long clip name
+ * cannot stretch it.
  */
 export default function VideoUpload({
   file,
   metadata,
-  frameCount,
-  estimate,
   onSelect,
   onClear,
-  onFrameCountChange,
   isBusy,
   validationError,
   children,
@@ -88,24 +85,9 @@ export default function VideoUpload({
             </button>
           </div>
 
-          <VideoFrameSelector
-            value={frameCount}
-            onChange={onFrameCountChange}
-            disabled={isBusy}
-          />
-
-          {estimate ? (
-            <div className="estimate">
-              <span className="estimate__label">Estimated processing time</span>
-              <span className="estimate__value is-mono">
-                {formatDurationRange(estimate.totalMs) ?? '--'}
-              </span>
-              <span className="estimate__basis">
-                {describeEstimateBasis(estimate.measured)} · about{' '}
-                {formatApproxSeconds(estimate.perFrameMs)} per frame
-              </span>
-            </div>
-          ) : null}
+          <p className="panel-note">
+            Frame sampling and processing time are determined automatically by the analysis service.
+          </p>
 
           {children}
         </div>

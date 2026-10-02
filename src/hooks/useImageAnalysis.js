@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { analyzeImage } from '../services/api.js'
+import { notifyActivity } from '../services/activityHeartbeat.js'
 import { validateImageFile } from '../utils/validateFile.js'
 
 export const IMAGE_STATUS = {
@@ -49,6 +50,7 @@ export default function useImageAnalysis() {
   const [durationMs, setDurationMs] = useState(null)
   const [error, setError] = useState(null)
   const [startedAt, setStartedAt] = useState(null)
+  const [forceNewAnalysis, setForceNewAnalysis] = useState(false)
 
   const previewRef = useRef(null)
   const abortRef = useRef(null)
@@ -82,6 +84,7 @@ export default function useImageAnalysis() {
     async (candidate) => {
       abortRef.current?.abort()
       abortRef.current = null
+      notifyActivity()
 
       if (!candidate) return null
 
@@ -120,6 +123,7 @@ export default function useImageAnalysis() {
 
   const run = useCallback(async () => {
     if (!file || status === IMAGE_STATUS.analyzing) return
+    notifyActivity()
 
     const controller = new AbortController()
     abortRef.current = controller
@@ -132,7 +136,7 @@ export default function useImageAnalysis() {
     setDurationMs(null)
 
     try {
-      const result = await analyzeImage(file, { signal: controller.signal })
+      const result = await analyzeImage(file, { signal: controller.signal, forceNewAnalysis })
       setData(result.data)
       setDurationMs(result.durationMs)
       setStatus(IMAGE_STATUS.success)
@@ -147,7 +151,7 @@ export default function useImageAnalysis() {
     } finally {
       if (abortRef.current === controller) abortRef.current = null
     }
-  }, [file, status])
+  }, [file, status, forceNewAnalysis])
 
   return {
     file,
@@ -159,6 +163,8 @@ export default function useImageAnalysis() {
     durationMs,
     error,
     startedAt,
+    forceNewAnalysis,
+    setForceNewAnalysis,
     isAnalyzing: status === IMAGE_STATUS.analyzing,
     hasResult: status === IMAGE_STATUS.success,
     select,

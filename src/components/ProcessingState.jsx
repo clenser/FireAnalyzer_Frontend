@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Check, Clock, LoaderCircle } from 'lucide-react'
-import { Card, IndeterminateBar, ProgressBar, Stat } from './ui'
-import { formatApproxSeconds, formatDuration, formatTimestamp } from '../utils/format'
+import { Card, IndeterminateBar } from './ui'
+import { formatDuration } from '../utils/format'
+import { VIDEO_STAGES } from '../hooks/useVideoAnalysis'
 
-const STAGES = ['Detection', 'Segmentation', 'Material analysis', 'AI analysis']
+const IMAGE_STAGES = ['Detection', 'Segmentation', 'Material analysis', 'AI analysis']
 
 const now = () =>
   typeof performance !== 'undefined' && typeof performance.now === 'function'
@@ -23,6 +24,22 @@ function useElapsed(startedAt) {
   return elapsedMs
 }
 
+function StageChips({ stages, activeStage }) {
+  return (
+    <ol className="stages">
+      {stages.map((stage, index) => {
+        const state = index < activeStage ? 'done' : index === activeStage ? 'active' : 'pending'
+        return (
+          <li className={`stage-chip stage-chip--${state}`} key={stage}>
+            <Check size={11} strokeWidth={2.5} aria-hidden="true" />
+            {stage}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
 /**
  * Image analysis: one request covers every stage, so the steps advance on a
  * timer while the indeterminate bar shows that the request is in flight, and the
@@ -34,7 +51,7 @@ export function ImageProcessingState({ startedAt }) {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setActiveStage((stage) => Math.min(STAGES.length - 1, stage + 1))
+      setActiveStage((stage) => Math.min(IMAGE_STAGES.length - 1, stage + 1))
     }, 2600)
     return () => clearInterval(timer)
   }, [])
@@ -51,65 +68,35 @@ export function ImageProcessingState({ startedAt }) {
       </div>
 
       <IndeterminateBar label="Analysis in progress" />
-
-      <ol className="stages">
-        {STAGES.map((stage, index) => {
-          const state = index < activeStage ? 'done' : index === activeStage ? 'active' : 'pending'
-          return (
-            <li className={`stage-chip stage-chip--${state}`} key={stage}>
-              <Check size={11} strokeWidth={2.5} aria-hidden="true" />
-              {stage}
-            </li>
-          )
-        })}
-      </ol>
+      <StageChips stages={IMAGE_STAGES} activeStage={activeStage} />
     </Card>
   )
 }
 
 /**
- * Video analysis: frame extraction then one request per frame, so progress is
- * real and determinate. The remaining time is an estimate derived from measured
- * request durations, and is labelled as such.
+ * Video analysis: the whole pipeline (frame sampling through the Python fusion
+ * vote) runs in a single server request, so progress is a real elapsed-time
+ * readout plus an indeterminate bar - never a fabricated percentage. The stage
+ * list advances on a timer purely to describe what the backend is doing; it is
+ * not a measured progress signal.
  */
-export function VideoProcessingState({ progress, estimatedRemainingMs, startedAt }) {
-  const elapsedMs = useElapsed(startedAt ?? progress?.startedAt)
-  const completed = progress?.completed ?? 0
-  const total = progress?.total ?? 0
-  const extracting = progress?.phase === 'extracting'
+export function VideoProcessingState({ startedAt, currentStage }) {
+  const elapsedMs = useElapsed(startedAt)
+  const activeStage = Math.max(0, VIDEO_STAGES.indexOf(currentStage))
 
   return (
     <Card className="result-card processing" role="status" aria-live="polite">
       <div className="processing__head">
         <LoaderCircle size={17} strokeWidth={1.75} aria-hidden="true" className="spin-icon" />
-        <p className="processing__title">{extracting ? 'Preparing frames…' : 'Analyzing frames…'}</p>
+        <p className="processing__title">Analyzing video…</p>
         <span className="processing__elapsed is-mono">
           <Clock size={12} strokeWidth={1.75} aria-hidden="true" />
           {formatDuration(elapsedMs) ?? '0.0s'}
         </span>
       </div>
 
-      <ProgressBar value={completed} max={total} label={`${completed} of ${total} frames`} />
-
-      <div className="stat-row stat-row--three">
-        <Stat
-          label="Progress"
-          value={total > 0 ? `${completed} / ${total}` : '--'}
-          mono
-        />
-        <Stat
-          label={extracting ? 'Reading frame' : 'Current frame'}
-          value={progress?.timestamp !== null && progress?.timestamp !== undefined
-            ? formatTimestamp(progress.timestamp)
-            : '--:--'}
-          mono
-        />
-        <Stat
-          label="Estimated remaining"
-          value={formatApproxSeconds(estimatedRemainingMs) ?? '--'}
-          mono
-        />
-      </div>
+      <IndeterminateBar label={currentStage ?? 'Analysis in progress'} />
+      <StageChips stages={VIDEO_STAGES} activeStage={activeStage} />
     </Card>
   )
 }

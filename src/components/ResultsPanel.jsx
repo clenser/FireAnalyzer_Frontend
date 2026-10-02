@@ -19,7 +19,7 @@ function EmptyState({ mode }) {
       <h2 className="results-empty__title">Results appear here</h2>
       <p className="results-empty__desc">
         {mode === 'video'
-          ? 'Choose a video and a frame count, then start the analysis.'
+          ? 'Choose a video, then start the analysis.'
           : 'Choose a flame image and start the analysis.'}
       </p>
       <ol className="results-empty__steps">
@@ -36,7 +36,7 @@ function EmptyState({ mode }) {
       </ol>
       <p className="results-empty__privacy">
         <ShieldCheck size={12} strokeWidth={1.75} aria-hidden="true" />
-        Video frames are extracted in your browser; only the sampled stills are sent.
+        The analysis service samples and analyses the file directly; nothing is processed in your browser.
       </p>
     </div>
   )
@@ -59,12 +59,9 @@ export default function ResultsPanel({ mode, image, video }) {
 }
 
 function ResultsBody({ mode, image, video, active }) {
-  if (active.isAnalyzing || active.isBusy) {
+  if (active.isAnalyzing) {
     return mode === 'video' ? (
-      <VideoProcessingState
-        progress={video.progress}
-        estimatedRemainingMs={video.estimatedRemainingMs}
-      />
+      <VideoProcessingState startedAt={video.startedAt} currentStage={video.currentStage} />
     ) : (
       <ImageProcessingState startedAt={image.startedAt} />
     )
@@ -76,7 +73,7 @@ function ResultsBody({ mode, image, video, active }) {
 
   if (mode === 'video') {
     if (video.hasResult) {
-      return <VideoAnalysisResult result={video.result} durationMs={video.durationMs} />
+      return <VideoAnalysisResult data={video.result} durationMs={video.durationMs} />
     }
     return <EmptyState mode="video" />
   }
