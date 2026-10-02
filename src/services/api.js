@@ -156,11 +156,22 @@ export async function analyzeImage(file, { signal, forceNewAnalysis = false, onD
  *
  * `force_new_analysis` bypasses the backend's 48-hour cache and replaces the
  * cached entry, exactly as for an image.
+ *
+ * `frameCount` is the exact backend parameter name `frame_count`: the total
+ * number of evenly spaced frames to sample from the clip. It is only sent
+ * when it is a finite integer - omitting it preserves the backend's own
+ * default (`FLAME_VIDEO_MAX_FRAMES`). The backend validates and clamps it
+ * server-side (`MIN_FRAMES_LIMIT`-`MAX_FRAMES_LIMIT`); this layer does not
+ * second-guess that, it only forwards what the caller chose.
  */
-export async function analyzeVideo(file, { signal, forceNewAnalysis = false, onDuration } = {}) {
+export async function analyzeVideo(
+  file,
+  { signal, forceNewAnalysis = false, frameCount = null, onDuration } = {},
+) {
   const formData = new FormData()
   formData.append('video', file)
   if (forceNewAnalysis) formData.append('force_new_analysis', 'true')
+  if (Number.isInteger(frameCount)) formData.append('frame_count', String(frameCount))
 
   const startedAt = now()
   let response

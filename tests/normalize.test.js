@@ -197,7 +197,54 @@ test('missing and malformed video payloads normalise to a safe empty shape', () 
     assert.equal(result.material, null)
     assert.deepEqual(result.frames, [])
     assert.deepEqual(result.representativeFrames, [])
+    assert.equal(result.detectionSummary, null)
+    assert.equal(result.evidenceSummary, null)
   }
+})
+
+/* ------------------------------ detection_summary / evidence_summary ------------------------------ */
+
+test('detection_summary is read as a frame count, never a fabricated confidence', () => {
+  const result = normaliseVideoResponse(
+    videoPayload({ detection_summary: { flame_frames: 3, sampled_frames: 4, text: 'Flame seen in 3 of 4 sampled frames' } }),
+  )
+  assert.deepEqual(result.detectionSummary, {
+    flameFrames: 3,
+    sampledFrames: 4,
+    text: 'Flame seen in 3 of 4 sampled frames',
+  })
+})
+
+test('evidence_summary carries the top colour/vision match independent of the fused decision', () => {
+  const result = normaliseVideoResponse(
+    videoPayload({
+      final_material: null,
+      uncertain: true,
+      evidence_summary: {
+        top_colour_match: { material: 'Wood Materials', frames: 3, share: 0.75 },
+        top_vision_match: { material: 'Paper Products', frames: 2, share: 0.5 },
+        colour_distribution: [
+          { material: 'Wood Materials', frames: 3 },
+          { material: 'Plastics', frames: 1 },
+        ],
+        vision_distribution: [{ material: 'Paper Products', frames: 2 }],
+        colour_frames_considered: 4,
+        vision_frames_considered: 4,
+      },
+    }),
+  )
+
+  assert.deepEqual(result.evidenceSummary.topColourMatch, { material: 'Wood Materials', frames: 3, share: 0.75 })
+  assert.deepEqual(result.evidenceSummary.topVisionMatch, { material: 'Paper Products', frames: 2, share: 0.5 })
+  assert.equal(result.evidenceSummary.colourDistribution.length, 2)
+  assert.equal(result.evidenceSummary.visionDistribution.length, 1)
+  assert.equal(result.evidenceSummary.colourFramesConsidered, 4)
+  assert.equal(result.evidenceSummary.visionFramesConsidered, 4)
+})
+
+test('an absent evidence_summary normalises to null rather than an empty shell', () => {
+  const result = normaliseVideoResponse(videoPayload())
+  assert.equal(result.evidenceSummary, null)
 })
 
 /* ------------------------------ AI material (secondary Gemini opinion) ------------------------------ */

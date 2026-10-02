@@ -4,11 +4,12 @@ import { ACCEPT_VIDEO_ATTRIBUTE, VIDEO_SUPPORTED_DETAIL } from '../config'
 import { formatBytes, formatTimestamp } from '../utils/format'
 
 /**
- * Video source selection: dropzone plus a metadata readout. The backend samples
- * and times the analysis itself, so there is no frame-count control here - only
- * the file's own duration and resolution, read locally before upload. The panel
- * keeps a fixed maximum height and scrolls internally, so a long clip name
- * cannot stretch it.
+ * Video source selection: dropzone plus a metadata readout, the file's own
+ * duration and resolution read locally before upload. The frame-count control
+ * and Force New Analysis toggle are passed in as `children`, rendered once a
+ * file is selected and before analysis starts. The panel keeps a fixed
+ * maximum height and scrolls internally, so a long clip name cannot stretch
+ * it.
  */
 export default function VideoUpload({
   file,
@@ -84,10 +85,6 @@ export default function VideoUpload({
               Remove
             </button>
           </div>
-
-          <p className="panel-note">
-            Frame sampling and processing time are determined automatically by the analysis service.
-          </p>
 
           {children}
         </div>

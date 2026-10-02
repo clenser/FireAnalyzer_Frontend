@@ -333,6 +333,32 @@ test('analyzeVideo also supports force_new_analysis', async () => {
   assert.equal(calls[0].options.body.get('force_new_analysis'), 'true')
 })
 
+test('frame_count is sent under the exact backend parameter name when provided', async () => {
+  const calls = respondWith({ body: videoSuccessBody })
+
+  await analyzeVideo(mp4File(), { frameCount: 24 })
+
+  assert.equal(calls[0].options.body.get('frame_count'), '24')
+})
+
+test('frame_count is omitted when not provided, preserving the backend default', async () => {
+  const calls = respondWith({ body: videoSuccessBody })
+
+  await analyzeVideo(mp4File())
+
+  assert.equal(calls[0].options.body.has('frame_count'), false)
+})
+
+test('a non-integer frame_count is never sent', async () => {
+  const calls = respondWith({ body: videoSuccessBody })
+
+  await analyzeVideo(mp4File(), { frameCount: 12.5 })
+  assert.equal(calls[0].options.body.has('frame_count'), false)
+
+  await analyzeVideo(mp4File(), { frameCount: Number.NaN })
+  assert.equal(calls[1].options.body.has('frame_count'), false)
+})
+
 /* --------------------------------- activity -------------------------------- */
 
 test('pingActivity never throws, even on failure', async () => {

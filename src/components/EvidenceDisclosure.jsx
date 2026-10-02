@@ -8,8 +8,8 @@ import { Disclosure } from './ui'
  */
 export default function EvidenceDisclosure({ evidence }) {
   if (!evidence) return null
-  const { evidenceQuality, ranking, visionProvider, visionCandidates } = evidence
-  if (!ranking?.length && !visionCandidates?.length) return null
+  const { evidenceQuality, ranking, visionProvider, visionCandidates, distribution } = evidence
+  if (!ranking?.length && !visionCandidates?.length && !distribution?.length) return null
 
   return (
     <Disclosure summary="Analysis evidence" className="evidence">
@@ -39,6 +39,24 @@ export default function EvidenceDisclosure({ evidence }) {
                 <span className="alt__rank is-mono">{String(index + 1).padStart(2, '0')}</span>
                 <span className="alt__name">{entry.material}</span>
                 <span className="alt__sim is-mono">{entry.confidence ?? '--'}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
+
+      {distribution?.length ? (
+        <div className="evidence__group">
+          <p className="subsection__title">Material distribution across frames</p>
+          <ol className="alts">
+            {distribution.map((entry, index) => (
+              <li className="alt" key={entry.material}>
+                <span className="alt__rank is-mono">{String(index + 1).padStart(2, '0')}</span>
+                <span className="alt__name">{entry.material}</span>
+                <span className="alt__sim is-mono">
+                  {entry.framesText}
+                  {entry.share ? ` · ${entry.share}` : ''}
+                </span>
               </li>
             ))}
           </ol>

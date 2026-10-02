@@ -434,6 +434,55 @@ export function normaliseImageResponse(payload) {
   }
 }
 
+/**
+ * The video-level detection summary (`detection_summary`): a frame count, not
+ * a confidence percentage - the backend deliberately never fabricates one for
+ * video-level flame detection, so this normaliser does not invent one either.
+ */
+function normaliseDetectionSummary(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const flameFrames = firstNumber(raw, ['flame_frames'])
+  const sampledFrames = firstNumber(raw, ['sampled_frames'])
+  if (flameFrames === null || sampledFrames === null) return null
+  return { flameFrames, sampledFrames, text: firstString(raw, ['text']) }
+}
+
+/** One entry of an aggregated video evidence distribution (material + frame count/share). */
+function normaliseEvidenceEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null
+  const material = firstString(entry, ['material'])
+  if (!material) return null
+  return { material, frames: firstNumber(entry, ['frames']) ?? 0, share: firstNumber(entry, ['share']) }
+}
+
+function normaliseEvidenceDistribution(list) {
+  if (!Array.isArray(list)) return []
+  return list.map(normaliseEvidenceEntry).filter(Boolean)
+}
+
+/**
+ * The video-level `evidence_summary`: the strongest colour/vision evidence
+ * aggregated across frames, independent of the fused per-frame decision - so
+ * it stays available even when the consolidated `final_material` is
+ * `null`/uncertain. Never recomputed here, only read.
+ */
+function normaliseEvidenceSummary(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const topColourMatch = normaliseEvidenceEntry(firstObject(raw, ['top_colour_match']))
+  const topVisionMatch = normaliseEvidenceEntry(firstObject(raw, ['top_vision_match']))
+  const colourDistribution = normaliseEvidenceDistribution(firstArray(raw, ['colour_distribution']))
+  const visionDistribution = normaliseEvidenceDistribution(firstArray(raw, ['vision_distribution']))
+  if (!topColourMatch && !topVisionMatch && !colourDistribution.length && !visionDistribution.length) return null
+  return {
+    topColourMatch,
+    topVisionMatch,
+    colourDistribution,
+    visionDistribution,
+    colourFramesConsidered: firstNumber(raw, ['colour_frames_considered']),
+    visionFramesConsidered: firstNumber(raw, ['vision_frames_considered']),
+  }
+}
+
 /* --------------------------------- Video result --------------------------------- */
 
 /**
@@ -462,11 +511,13 @@ export function normaliseVideoResponse(payload) {
     return {
       cached: false,
       video: null,
+      detectionSummary: null,
       detectionCount: 0,
       framesWithFlame: 0,
       visionProvider: 'none',
       material: null,
       distribution: [],
+      evidenceSummary: null,
       consolidated: null,
       fireClass: null,
       agents: [],
@@ -492,6 +543,7 @@ export function normaliseVideoResponse(payload) {
           framesSampled: firstNumber(videoRaw, ['frames_sampled']),
         }
       : null,
+    detectionSummary: normaliseDetectionSummary(firstObject(payload, ['detection_summary'])),
     detectionCount: firstNumber(payload, ['detection_count']) ?? 0,
     framesWithFlame: firstNumber(payload, ['frames_with_flame']) ?? 0,
     visionProvider: firstString(payload, ['vision_provider']) ?? 'none',
@@ -499,6 +551,7 @@ export function normaliseVideoResponse(payload) {
     // The video-level `candidate_materials` is the vote distribution, not a
     // per-item score list - a different shape from the per-frame one.
     distribution: normaliseVoteDistribution(firstArray(payload, ['candidate_materials'])),
+    evidenceSummary: normaliseEvidenceSummary(firstObject(payload, ['evidence_summary'])),
     consolidated: consolidatedRaw
       ? {
           framesSampled: firstNumber(consolidatedRaw, ['frames_sampled']),

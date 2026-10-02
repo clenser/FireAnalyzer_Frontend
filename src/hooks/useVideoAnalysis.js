@@ -3,6 +3,7 @@ import { analyzeVideo } from '../services/api.js'
 import { notifyActivity } from '../services/activityHeartbeat.js'
 import { validateVideoFile } from '../utils/validateFile.js'
 import { describeVideoError, loadVideoSource } from '../utils/videoFrames.js'
+import { VIDEO_FRAME_COUNT_DEFAULT, VIDEO_FRAME_COUNT_MAX, VIDEO_FRAME_COUNT_MIN } from '../config.js'
 
 export const VIDEO_STATUS = {
   idle: 'idle',
@@ -47,6 +48,10 @@ export default function useVideoAnalysis() {
   const [stageIndex, setStageIndex] = useState(0)
   const [startedAt, setStartedAt] = useState(null)
   const [forceNewAnalysis, setForceNewAnalysis] = useState(false)
+  // The frame count the user chose before analysis starts - sent to the
+  // backend as `frame_count`. There is no mid-analysis prompt for this: once
+  // `run` fires, the value is locked in for that request.
+  const [frameCount, setFrameCount] = useState(VIDEO_FRAME_COUNT_DEFAULT)
   // The flag actually used by the last completed request, captured at request
   // time so a later toggle change can never relabel a result that already came
   // back.
@@ -148,8 +153,19 @@ export default function useVideoAnalysis() {
       setStageIndex((stage) => Math.min(VIDEO_STAGES.length - 1, stage + 1))
     }, 3500)
 
+    // Defence in depth: FrameCountInput already keeps this in range, but a
+    // request is never sent with a value outside what the backend accepts.
+    const clampedFrameCount = Math.min(
+      VIDEO_FRAME_COUNT_MAX,
+      Math.max(VIDEO_FRAME_COUNT_MIN, Math.round(frameCount) || VIDEO_FRAME_COUNT_DEFAULT),
+    )
+
     try {
-      const response = await analyzeVideo(file, { signal: controller.signal, forceNewAnalysis })
+      const response = await analyzeVideo(file, {
+        signal: controller.signal,
+        forceNewAnalysis,
+        frameCount: clampedFrameCount,
+      })
       clearStageTimer()
       setResult(response.data)
       setDurationMs(response.durationMs)
@@ -162,7 +178,7 @@ export default function useVideoAnalysis() {
     } finally {
       if (abortRef.current === controller) abortRef.current = null
     }
-  }, [file, status, forceNewAnalysis, resetRunState, clearStageTimer])
+  }, [file, status, forceNewAnalysis, frameCount, resetRunState, clearStageTimer])
 
   return {
     file,
@@ -176,6 +192,8 @@ export default function useVideoAnalysis() {
     currentStage: VIDEO_STAGES[stageIndex] ?? VIDEO_STAGES[0],
     forceNewAnalysis,
     setForceNewAnalysis,
+    frameCount,
+    setFrameCount,
     wasForced,
     isAnalyzing: status === VIDEO_STATUS.analyzing,
     isLoading: status === VIDEO_STATUS.loading,

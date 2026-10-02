@@ -3,6 +3,7 @@ import { Card, Toggle } from './ui'
 import { FORCE_NEW_ANALYSIS_HELP } from '../config'
 import ImageUpload from './ImageUpload'
 import VideoUpload from './VideoUpload'
+import FrameCountInput from './FrameCountInput'
 import AnalyzeButton from './AnalyzeButton'
 
 const MODES = [
@@ -83,6 +84,11 @@ export default function AnalysisInput({
             isBusy={video.isBusy}
             validationError={video.validationError}
           >
+            <FrameCountInput
+              value={video.frameCount}
+              onChange={video.setFrameCount}
+              disabled={video.isBusy}
+            />
             <Toggle
               checked={video.forceNewAnalysis}
               onChange={video.setForceNewAnalysis}

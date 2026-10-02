@@ -29,10 +29,12 @@ export default function DetectionCard({ detection, className = '' }) {
         </div>
       </div>
 
-      <div className="stat-row">
-        <Stat label="Confidence" value={confidence} mono />
-        {flameArea ? <Stat label="Flame area" value={flameArea} mono /> : null}
-      </div>
+      {confidence || flameArea ? (
+        <div className="stat-row">
+          {confidence ? <Stat label="Confidence" value={confidence} mono /> : null}
+          {flameArea ? <Stat label="Flame area" value={flameArea} mono /> : null}
+        </div>
+      ) : null}
 
       {detection.confidenceRatio !== null && detection.confidenceRatio !== undefined ? (
         <Meter

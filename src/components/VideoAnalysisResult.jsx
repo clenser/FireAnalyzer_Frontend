@@ -6,7 +6,6 @@ import AllFramesDisclosure from './AllFramesDisclosure'
 import VideoSummaryCard from './VideoSummaryCard'
 import DetectionCard from './DetectionCard'
 import MaterialCard from './MaterialCard'
-import MaterialDistributionCard from './MaterialDistributionCard'
 import FireClassCard from './FireClassCard'
 import SuppressionCard, { DurationNote } from './SuppressionCard'
 
@@ -14,14 +13,15 @@ import SuppressionCard, { DurationNote } from './SuppressionCard'
  * The video dashboard, in the one fixed result order:
  *
  *   representative frames -> view all analyzed frames -> video summary ->
- *   flame detection -> material identification -> material distribution ->
- *   fire class -> processing complete
+ *   flame detection -> material identification (remaining colour/AI
+ *   candidates and the frame vote distribution collapsed inside it) -> fire
+ *   class -> processing complete
  *
  * The consolidated material, confidence and fire class are the backend's own
  * Python majority/consistency vote over the per-frame decisions - never an
  * AI-generated video conclusion, and never recomputed here. A card the data
  * cannot justify - the material card when the result is uncertain, the
- * distribution card with nothing to show - is omitted rather than padded out.
+ * distribution rows with nothing to show - is omitted rather than padded out.
  */
 export default function VideoAnalysisResult({ data, durationMs, wasForced }) {
   const model = useMemo(
@@ -43,15 +43,9 @@ export default function VideoAnalysisResult({ data, durationMs, wasForced }) {
         </Card>
       ) : null}
 
-      <VideoSummaryCard
-        summary={model.summary}
-        material={model.material}
-        fireClass={model.fireClass}
-        className="area-summary"
-      />
+      <VideoSummaryCard summary={model.summary} className="area-summary" />
       <DetectionCard detection={model.detection} className="area-detection is-solo" />
-      <MaterialCard material={model.material} className="area-material is-solo" />
-      <MaterialDistributionCard distribution={model.distribution} className="area-class" />
+      <MaterialCard material={model.material} evidence={model.evidence} className="area-material is-solo" />
       <FireClassCard fireClass={model.fireClass} className="area-class" />
 
       {!model.fireClass && model.suppression ? (

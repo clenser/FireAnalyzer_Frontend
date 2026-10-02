@@ -103,7 +103,17 @@ function buildFlameColorModel(color, { title = 'Mean Flame Color', average = fal
 function buildMaterialModel(
   material,
   candidates = [],
-  { title = 'Material Identification', deterministicEvidence = null, visionEvidence = null } = {},
+  {
+    title = 'Material Identification',
+    deterministicEvidence = null,
+    visionEvidence = null,
+    // Pre-built fallbacks for a video result: the backend's own aggregated
+    // `evidence_summary.top_colour_match` / `top_vision_match`, each already
+    // `{ label, name, confidence }`. Used only when no per-frame
+    // deterministic/vision evidence is available to derive a #1 from.
+    topColourMatch = null,
+    topVisionMatch = null,
+  } = {},
 ) {
   if (!material) return null
 
@@ -121,10 +131,10 @@ function buildMaterialModel(
     const topMatches = {
       colour: topColourEntry
         ? { label: 'Colour', name: topColourEntry.material, confidence: percent(topColourEntry.similarity) }
-        : null,
+        : topColourMatch,
       vision: topVisionEntry
         ? { label: visionLabel, name: topVisionEntry.material, confidence: percent(topVisionEntry.confidence) }
-        : null,
+        : topVisionMatch,
     }
 
     return {
@@ -177,6 +187,77 @@ function buildEvidenceModel(deterministicEvidence, visionEvidence) {
     visionProvider:
       visionEvidence?.provider && visionEvidence.provider !== 'none' ? titleCase(visionEvidence.provider) : null,
     visionCandidates,
+  }
+}
+
+/** `share`/`frames` → `"72.0% · 3/4 frames"`, or just whichever half is available. */
+function buildEvidenceScoreText(entry, totalFrames) {
+  if (!entry) return null
+  const sharePart = percent(entry.share)
+  const framesPart =
+    isFiniteNumber(entry.frames) && isFiniteNumber(totalFrames) && totalFrames > 0
+      ? `${entry.frames}/${totalFrames} frames`
+      : null
+  const text = [sharePart, framesPart].filter(Boolean).join(' · ')
+  return text || null
+}
+
+/**
+ * The video's #1 colour/#1 vision match, built from the backend's own
+ * `evidence_summary` - frame-aggregated, independent of the fused per-frame
+ * decision, so it stays available even when the consolidated material is
+ * uncertain. Fed into `buildMaterialModel`'s uncertain-branch fallback.
+ */
+function buildVideoTopMatches(evidenceSummary, visionProvider) {
+  if (!evidenceSummary) return { colour: null, vision: null }
+  const visionLabel = visionProvider && visionProvider !== 'none' ? titleCase(visionProvider) : 'AI'
+  const { topColourMatch, topVisionMatch, colourFramesConsidered, visionFramesConsidered } = evidenceSummary
+
+  return {
+    colour: topColourMatch
+      ? {
+          label: 'Colour',
+          name: topColourMatch.material,
+          confidence: buildEvidenceScoreText(topColourMatch, colourFramesConsidered),
+        }
+      : null,
+    vision: topVisionMatch
+      ? {
+          label: visionLabel,
+          name: topVisionMatch.material,
+          confidence: buildEvidenceScoreText(topVisionMatch, visionFramesConsidered),
+        }
+      : null,
+  }
+}
+
+/**
+ * The video's hidden evidence disclosure: candidates beyond the #1 shown
+ * above, plus the per-frame material vote distribution. Everything here is a
+ * frame count/share the backend already computed - nothing is recomputed.
+ */
+function buildVideoEvidenceModel(evidenceSummary, distribution) {
+  const colourFrames = evidenceSummary?.colourFramesConsidered ?? null
+  const visionFrames = evidenceSummary?.visionFramesConsidered ?? null
+
+  const ranking = (evidenceSummary?.colourDistribution ?? [])
+    .slice(1, MAX_EVIDENCE_ROWS + 1)
+    .map((entry) => ({ material: entry.material, similarity: buildEvidenceScoreText(entry, colourFrames) }))
+
+  const visionCandidates = (evidenceSummary?.visionDistribution ?? [])
+    .slice(1, MAX_EVIDENCE_ROWS + 1)
+    .map((entry) => ({ material: entry.material, confidence: buildEvidenceScoreText(entry, visionFrames) }))
+
+  const hasDistribution = Boolean(distribution?.length)
+
+  if (ranking.length === 0 && visionCandidates.length === 0 && !hasDistribution) return null
+
+  return {
+    evidenceQuality: null,
+    ranking,
+    visionProvider: null,
+    visionCandidates,
+    distribution: hasDistribution ? distribution : null,
   }
 }
 
@@ -347,16 +428,21 @@ function buildDistributionModel(distribution, totalFrames) {
 export function buildVideoResultModel({ data, measuredDurationMs, wasForced = false } = {}) {
   if (!data) return null
 
-  const material = buildMaterialModel(data.material, [])
+  const topMatches = buildVideoTopMatches(data.evidenceSummary, data.visionProvider)
+  const material = buildMaterialModel(data.material, [], {
+    topColourMatch: topMatches.colour,
+    topVisionMatch: topMatches.vision,
+  })
   const distribution = buildDistributionModel(data.distribution, data.consolidated?.framesAnalyzed)
+  const evidence = buildVideoEvidenceModel(data.evidenceSummary, distribution)
   const fireClass = buildFireClassModel(data.fireClass, data.agents, data.material?.finalMaterial)
   const suppression = data.suppression?.methods?.length ? data.suppression : null
 
   const representative = (data.representativeFrames ?? []).map(buildFrameTile).filter(Boolean)
   const allFrames = (data.frames ?? []).map(buildFrameTile).filter(Boolean)
 
-  const framesSampled = data.video?.framesSampled ?? allFrames.length
-  const framesWithFlame = data.framesWithFlame ?? 0
+  const framesSampled = data.video?.framesSampled ?? data.detectionSummary?.sampledFrames ?? allFrames.length
+  const framesWithFlame = data.detectionSummary?.flameFrames ?? data.framesWithFlame ?? 0
   const framesAnalyzed = data.consolidated?.framesAnalyzed ?? null
 
   const hasContent = Boolean(representative.length > 0 || material || fireClass || suppression || allFrames.length)
@@ -379,15 +465,24 @@ export function buildVideoResultModel({ data, measuredDurationMs, wasForced = fa
     detection: {
       detected: framesWithFlame > 0,
       statusText: framesWithFlame > 0 ? 'Detected' : 'Not detected',
+      // The backend's own `detection_summary.text` - never a percentage, which
+      // would either be fabricated or average several frames' confidences
+      // into one meaningless number. A fallback covers an older cached
+      // payload saved before this field existed.
       headline:
-        framesWithFlame > 0
+        data.detectionSummary?.text ??
+        (framesWithFlame > 0
           ? `Flame seen in ${framesWithFlame} of ${framesSampled} sampled frames`
-          : 'No flame seen in the sampled frames',
-      confidence: isFiniteNumber(data.material?.confidence) ? percent(data.material.confidence) : null,
-      confidenceRatio: isFiniteNumber(data.material?.confidence) ? data.material.confidence : null,
+          : 'No flame seen in the sampled frames'),
+      // Deliberately no confidence/flameArea here: a video's "detection
+      // confidence" would really be the fused material confidence, which is
+      // already shown (correctly labelled) on the material card below.
+      confidence: null,
+      confidenceRatio: null,
       flameArea: null,
     },
     material,
+    evidence,
     distribution,
     fireClass,
     suppression: suppression ? { methods: suppression.methods.slice(0, MAX_ALTERNATIVES) } : null,

@@ -388,6 +388,83 @@ test('an uncertain video decision states so without inventing a material', () =>
   assert.equal(model.material.name, null)
 })
 
+test('an uncertain video decision shows the #1 colour and #1 AI match from evidence_summary, not a bare "uncertain"', () => {
+  const model = buildVideoResultModel({
+    data: videoData({
+      final_material: null,
+      uncertain: true,
+      vision_provider: 'groq',
+      evidence_summary: {
+        top_colour_match: { material: 'Wood Materials', frames: 3, share: 0.75 },
+        top_vision_match: { material: 'Paper Products', frames: 2, share: 0.5 },
+        colour_distribution: [
+          { material: 'Wood Materials', frames: 3 },
+          { material: 'Plastics', frames: 1 },
+        ],
+        vision_distribution: [{ material: 'Paper Products', frames: 2 }],
+        colour_frames_considered: 4,
+        vision_frames_considered: 4,
+      },
+    }),
+  })
+
+  assert.equal(model.material.uncertain, true)
+  assert.equal(model.material.hasTopMatches, true)
+  assert.equal(model.material.topMatches.colour.name, 'Wood Materials')
+  assert.equal(model.material.topMatches.colour.label, 'Colour')
+  assert.match(model.material.topMatches.colour.confidence, /75\.0%/)
+  assert.match(model.material.topMatches.colour.confidence, /3\/4 frames/)
+  assert.equal(model.material.topMatches.vision.name, 'Paper Products')
+  assert.equal(model.material.topMatches.vision.label, 'Groq')
+})
+
+test('an uncertain video with no evidence_summary at all shows no fabricated top match', () => {
+  const model = buildVideoResultModel({
+    data: videoData({ final_material: null, uncertain: true }),
+  })
+  assert.equal(model.material.hasTopMatches, false)
+})
+
+test('the video flame-detection section never carries a confidence percentage', () => {
+  const model = buildVideoResultModel({ data: videoData() })
+  assert.equal(model.detection.confidence, null)
+  assert.equal(model.detection.confidenceRatio, null)
+})
+
+test("the video flame-detection headline prefers the backend's own detection_summary text", () => {
+  const model = buildVideoResultModel({
+    data: videoData({ detection_summary: { flame_frames: 2, sampled_frames: 4, text: 'Flame seen in 2 of 4 sampled frames' } }),
+  })
+  assert.equal(model.detection.headline, 'Flame seen in 2 of 4 sampled frames')
+})
+
+test('the remaining colour/vision candidates and the vote distribution are collapsed into one evidence model', () => {
+  const model = buildVideoResultModel({
+    data: videoData({
+      evidence_summary: {
+        top_colour_match: { material: 'Wood Materials', frames: 3, share: 0.75 },
+        top_vision_match: { material: 'Wood Materials', frames: 2, share: 0.5 },
+        colour_distribution: [
+          { material: 'Wood Materials', frames: 3 },
+          { material: 'Paper Products', frames: 1 },
+        ],
+        vision_distribution: [{ material: 'Wood Materials', frames: 2 }],
+        colour_frames_considered: 4,
+        vision_frames_considered: 4,
+      },
+    }),
+  })
+
+  // The #1 colour match ("Wood Materials") is already shown elsewhere; only
+  // the remainder appears in the evidence disclosure.
+  assert.deepEqual(model.evidence.ranking.map((r) => r.material), ['Paper Products'])
+  assert.deepEqual(model.evidence.visionCandidates, [])
+  assert.deepEqual(
+    model.evidence.distribution.map((entry) => entry.material),
+    ['Wood Materials', 'Paper Products'],
+  )
+})
+
 test('the video result never carries an AI card - the backend produces none', () => {
   const model = buildVideoResultModel({ data: videoData() })
   assert.equal('ai' in model, false)

@@ -2094,6 +2094,58 @@ legend {
 }
 
 /* ============================================================
+   Field (Frames to Analyze)
+   ============================================================ */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field[data-disabled='true'] {
+  opacity: 0.5;
+}
+
+.field__label {
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.field__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.field__input {
+  width: 72px;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-soft);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  transition: border-color 0.15s ease;
+}
+
+.field__input:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
+
+.field__input:disabled {
+  cursor: not-allowed;
+}
+
+.field__hint {
+  font-size: 10.5px;
+  color: var(--text-4);
+}
+
+/* ============================================================
    Disclosure (expandable secondary detail)
    ============================================================ */
 

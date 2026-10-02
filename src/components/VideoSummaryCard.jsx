@@ -2,11 +2,11 @@ import { Film } from 'lucide-react'
 import { Card, CardHeader, Stat } from './ui'
 
 /**
- * The video's overall outcome: how many frames were sampled, how many showed a
- * flame, and the backend's own deterministic material/fire-class/confidence -
- * the Python majority vote, never an AI-generated conclusion.
+ * The video's at-a-glance outcome: how many frames were sampled and how many
+ * showed a flame. Nothing else - the material and fire-class verdicts have
+ * their own dedicated cards below, so they are not repeated here.
  */
-export default function VideoSummaryCard({ summary, material, fireClass, className = '' }) {
+export default function VideoSummaryCard({ summary, className = '' }) {
   if (!summary) return null
 
   const { framesSampled, flameFrameText, anyFlame } = summary
@@ -22,12 +22,7 @@ export default function VideoSummaryCard({ summary, material, fireClass, classNa
 
       <div className="video-summary__stats">
         <Stat label="Frames sampled" value={String(framesSampled)} />
-        <Stat label="Frames with flame" value={flameFrameText} />
-        <Stat
-          label="Final material"
-          value={material && !material.uncertain ? material.name : 'Uncertain'}
-        />
-        <Stat label="Fire class" value={fireClass?.name ?? '--'} />
+        <Stat label="Flame detected in" value={flameFrameText} />
       </div>
     </Card>
   )
