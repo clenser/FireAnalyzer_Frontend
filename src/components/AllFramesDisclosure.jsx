@@ -5,8 +5,9 @@ import { formatTimestamp } from '../utils/format'
 /**
  * Every analysed frame, collapsed by default. The representative frames above
  * already carry the backend's selection for an at-a-glance view; this exposes
- * the complete list - including frames that failed or found no flame - with
- * each frame's own result, never a textual summary in its place.
+ * the complete list - including frames that found no flame - in the same
+ * compact shape: frame number, timestamp, detection status, fire class.
+ * Material evidence stays in the video-level Material Identification card.
  */
 export default function AllFramesDisclosure({ frames }) {
   if (!frames?.length) return null
@@ -29,21 +30,8 @@ export default function AllFramesDisclosure({ frames }) {
                 <span className="is-mono"> · {formatTimestamp(frame.timestamp)}</span>
               </p>
               <p className="frame-row__status">
-                {!frame.success ? (
-                  <span className="is-muted">{frame.errorMessage ?? 'Not analyzed'}</span>
-                ) : frame.materialUncertain ? (
-                  <span className="is-muted">Material uncertain</span>
-                ) : (
-                  <>
-                    {frame.materialName ?? 'No material result'}
-                    {frame.confidence ? <span className="is-mono"> · {frame.confidence}</span> : null}
-                  </>
-                )}
-              </p>
-              <p className="frame-row__meta is-mono">
                 {frame.statusText}
-                {frame.detectionCount > 1 ? ` · ${frame.detectionCount} regions` : ''}
-                {frame.fireClassName ? ` · ${frame.fireClassName}` : ''}
+                {frame.fireClassName ? <span className="is-mono"> · {frame.fireClassName}</span> : null}
               </p>
             </div>
           </li>
