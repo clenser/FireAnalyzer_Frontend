@@ -410,12 +410,63 @@ test('an uncertain video decision shows the #1 colour and #1 AI match from evide
 
   assert.equal(model.material.uncertain, true)
   assert.equal(model.material.hasTopMatches, true)
+  assert.deepEqual(model.material.topMatches.colour, {
+    heading: 'Top colour match',
+    name: 'Wood Materials',
+    confidence: '75.0% · 3/4 frames',
+  })
+  assert.deepEqual(model.material.topMatches.vision, {
+    heading: 'Top AI vision match',
+    name: 'Paper Products',
+    confidence: '50.0% · 2/4 frames',
+  })
+})
+
+test('the uncertain video material card carries no frame-level uncertainty reasons', () => {
+  const model = buildVideoResultModel({
+    data: videoData({
+      final_material: null,
+      uncertain: true,
+      uncertainty_reasons: ['every analysed frame was individually uncertain'],
+      evidence_summary: {
+        top_colour_match: { material: 'Wood Materials', frames: 3, share: 0.75 },
+        top_vision_match: { material: 'Paper Products', frames: 2, share: 0.5 },
+        colour_distribution: [
+          { material: 'Wood Materials', frames: 3 },
+          { material: 'Plastics', frames: 1 },
+        ],
+        vision_distribution: [{ material: 'Paper Products', frames: 2 }],
+        colour_frames_considered: 4,
+        vision_frames_considered: 4,
+      },
+    }),
+  })
+
+  // The backend still decides it and still says it - the card is just never
+  // handed the wording, so there is nothing for it to render.
+  assert.equal('reasons' in model.material, false)
+  assert.equal(JSON.stringify(model.material).includes('every analysed frame was individually uncertain'), false)
+  // ...and the strongest evidence is still there to lead with.
+  assert.equal(model.material.hasTopMatches, true)
   assert.equal(model.material.topMatches.colour.name, 'Wood Materials')
-  assert.equal(model.material.topMatches.colour.label, 'Colour')
-  assert.match(model.material.topMatches.colour.confidence, /75\.0%/)
-  assert.match(model.material.topMatches.colour.confidence, /3\/4 frames/)
   assert.equal(model.material.topMatches.vision.name, 'Paper Products')
-  assert.equal(model.material.topMatches.vision.label, 'Groq')
+  // The remaining candidates stay expandable underneath.
+  assert.deepEqual(model.evidence.ranking.map((entry) => entry.material), ['Plastics'])
+  assert.deepEqual(model.evidence.visionCandidates, [])
+})
+
+test('an uncertain video with no frame-level evidence still shows no negative summary', () => {
+  const model = buildVideoResultModel({
+    data: videoData({
+      final_material: null,
+      uncertain: true,
+      uncertainty_reasons: ['every analysed frame was individually uncertain'],
+    }),
+  })
+
+  assert.equal(model.material.uncertain, true)
+  assert.deepEqual(model.material.reasons, undefined)
+  assert.equal(model.material.hasTopMatches, false)
 })
 
 test('an uncertain video with no evidence_summary at all shows no fabricated top match', () => {

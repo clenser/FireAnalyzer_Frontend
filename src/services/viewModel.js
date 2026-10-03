@@ -16,6 +16,11 @@
  *     exists only when its confidence reaches `AI_VISIBILITY_THRESHOLD_PERCENT`,
  *     and the material card states "uncertain" rather than guessing whenever
  *     the backend's own Python fusion could not decide.
+ *  5. Uncertain is never dressed up as a negative headline. An uncertain video
+ *     leads with its strongest available evidence - the #1 colour match and the
+ *     #1 AI vision match - because "no frame could be decided on its own" is an
+ *     internal per-frame diagnostic, not a useful thing to tell the user about
+ *     the video as a whole.
  */
 
 import { formatLab, formatRgb, rgbToCss } from './normalize.js'
@@ -99,12 +104,17 @@ function buildFlameColorModel(color, { title = 'Mean Flame Color', average = fal
  * `uncertain`, `uncertaintyReasons`). `candidates` is only meaningful for a
  * single image (`candidate_materials` score shape); a video passes `[]` here
  * and shows its own vote distribution in a separate card instead.
+ *
+ * `variant` picks which uncertain layout the card renders. `'image'` shows the
+ * backend's own reasons under "Confidence / evidence explanation"; `'video'`
+ * deliberately does not carry them at all - see the uncertain branch below.
  */
 function buildMaterialModel(
   material,
   candidates = [],
   {
     title = 'Material Identification',
+    variant = 'image',
     deterministicEvidence = null,
     visionEvidence = null,
     // Pre-built fallbacks for a video result: the backend's own aggregated
@@ -137,14 +147,22 @@ function buildMaterialModel(
         : topVisionMatch,
     }
 
-    return {
+    const uncertain = {
       title,
+      variant,
       uncertain: true,
       name: null,
-      reasons: material.uncertaintyReasons ?? [],
       topMatches,
       hasTopMatches: Boolean(topMatches.colour || topMatches.vision),
     }
+
+    // A video's `uncertainty_reasons` are frame-level diagnostics ("every
+    // analysed frame was individually uncertain"). Summarising a whole video
+    // with them says nothing useful about the video and reads as a bad result,
+    // so they are never handed to the card: the strongest evidence leads, and
+    // the remaining candidates stay in the collapsed evidence disclosure. An
+    // image keeps its own reasons - there the explanation is the whole card.
+    return variant === 'video' ? uncertain : { ...uncertain, reasons: material.uncertaintyReasons ?? [] }
   }
 
   const alternatives = (candidates ?? [])
@@ -159,6 +177,7 @@ function buildMaterialModel(
 
   return {
     title,
+    variant,
     uncertain: false,
     name: material.finalMaterial,
     similarity: percentValue(material.confidencePercent) ?? percent(material.confidence),
@@ -207,23 +226,26 @@ function buildEvidenceScoreText(entry, totalFrames) {
  * `evidence_summary` - frame-aggregated, independent of the fused per-frame
  * decision, so it stays available even when the consolidated material is
  * uncertain. Fed into `buildMaterialModel`'s uncertain-branch fallback.
+ *
+ * Each entry carries the heading its own row is shown under. The headings are
+ * fixed, neutral and evidence-first ("Top colour match", "Top AI vision match"):
+ * the score beside each name is the backend's own, never recomputed here.
  */
-function buildVideoTopMatches(evidenceSummary, visionProvider) {
+function buildVideoTopMatches(evidenceSummary) {
   if (!evidenceSummary) return { colour: null, vision: null }
-  const visionLabel = visionProvider && visionProvider !== 'none' ? titleCase(visionProvider) : 'AI'
   const { topColourMatch, topVisionMatch, colourFramesConsidered, visionFramesConsidered } = evidenceSummary
 
   return {
     colour: topColourMatch
       ? {
-          label: 'Colour',
+          heading: 'Top colour match',
           name: topColourMatch.material,
           confidence: buildEvidenceScoreText(topColourMatch, colourFramesConsidered),
         }
       : null,
     vision: topVisionMatch
       ? {
-          label: visionLabel,
+          heading: 'Top AI vision match',
           name: topVisionMatch.material,
           confidence: buildEvidenceScoreText(topVisionMatch, visionFramesConsidered),
         }
@@ -428,8 +450,9 @@ function buildDistributionModel(distribution, totalFrames) {
 export function buildVideoResultModel({ data, measuredDurationMs, wasForced = false } = {}) {
   if (!data) return null
 
-  const topMatches = buildVideoTopMatches(data.evidenceSummary, data.visionProvider)
+  const topMatches = buildVideoTopMatches(data.evidenceSummary)
   const material = buildMaterialModel(data.material, [], {
+    variant: 'video',
     topColourMatch: topMatches.colour,
     topVisionMatch: topMatches.vision,
   })

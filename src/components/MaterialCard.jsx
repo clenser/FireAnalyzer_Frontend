@@ -9,9 +9,16 @@ import EvidenceDisclosure from './EvidenceDisclosure'
  *
  * `material.uncertain` is the backend's own call, not a guess the frontend
  * makes: when the evidence could not separate the leading candidates, or
- * confidence was too low, `final_material` is `null` and the card states
- * "Material uncertain" with the backend's own reasons - no material is ever
- * invented to fill the card.
+ * confidence was too low, `final_material` is `null` - no material is ever
+ * invented to fill the card, whatever the variant.
+ *
+ * `material.variant` decides how an uncertain card reads. An image states the
+ * uncertainty with the backend's own reasons. A video must not: those reasons
+ * are per-frame diagnostics ("every analysed frame was individually
+ * uncertain"), which say nothing useful about the video and read as a bad
+ * result. The video instead leads with the strongest evidence actually
+ * available - its top colour match and top AI vision match - and keeps every
+ * remaining candidate in the same collapsed evidence disclosure below.
  *
  * `unavailable` covers the separate, stricter case where the endpoint that
  * would have answered could not be reached at all.
@@ -26,6 +33,35 @@ export default function MaterialCard({ material, unavailable = false, evidence =
       <Card className={`result-card material-card ${className}`.trim()}>
         <CardHeader icon={Boxes} title={title} tone="neutral" />
         <p className="ai-unavailable">Material identification unavailable</p>
+      </Card>
+    )
+  }
+
+  if (material.uncertain && material.variant === 'video') {
+    const topMatches = [material.topMatches?.colour, material.topMatches?.vision].filter(Boolean)
+
+    return (
+      <Card className={`result-card material-card ${className}`.trim()}>
+        <CardHeader icon={Boxes} title={title} tone="neutral" />
+
+        {topMatches.length ? (
+          topMatches.map((match, index) => (
+            <div className={`subsection${index === 0 ? ' subsection--first' : ''}`} key={match.heading}>
+              <p className="subsection__title">{match.heading}</p>
+              <ol className="alts">
+                <li className="alt">
+                  <span className="alt__rank is-mono">01</span>
+                  <span className="alt__name">{match.name}</span>
+                  <span className="alt__sim is-mono">{match.confidence ?? '--'}</span>
+                </li>
+              </ol>
+            </div>
+          ))
+        ) : (
+          <p className="ai-unavailable">No individual evidence source produced a usable top match.</p>
+        )}
+
+        {evidence ? <EvidenceDisclosure evidence={evidence} /> : null}
       </Card>
     )
   }
