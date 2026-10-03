@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Header from './components/Header'
 import AnalysisInput from './components/AnalysisInput'
 import ResultsPanel from './components/ResultsPanel'
+import IntroModal from './components/IntroModal'
 import useBackendConnection from './hooks/useBackendConnection'
 import useImageAnalysis from './hooks/useImageAnalysis'
 import useVideoAnalysis from './hooks/useVideoAnalysis'
@@ -12,9 +13,13 @@ import useActivityTracking from './hooks/useActivityTracking'
  * dashboard with the bounded input panel on the left/top and the compact result
  * panel on the right/below. Switching source mode clears the other mode's
  * selection so the DOM tree stays lean and no hidden huge panel remains.
+ *
+ * The one-time intro modal sits above the whole app and is dismissed once per
+ * visit; it states what the tool is and that its results are experimental.
  */
 export default function App() {
   const [mode, setMode] = useState('image')
+  const [showIntro, setShowIntro] = useState(true)
   const { connectionState, health, connectionReady, connectionMessage } = useBackendConnection()
   const image = useImageAnalysis()
   const video = useVideoAnalysis()
@@ -61,6 +66,8 @@ export default function App() {
           </div>
         </div>
       </main>
+
+      {showIntro ? <IntroModal onDismiss={() => setShowIntro(false)} /> : null}
     </div>
   )
 }

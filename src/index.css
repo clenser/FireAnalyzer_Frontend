@@ -185,6 +185,129 @@ legend {
 }
 
 /* ============================================================
+   Intro modal
+   ============================================================ */
+
+/* A native modal <dialog>: the platform owns the focus trap, the inert page
+   behind it and Escape-to-close. The dialog box itself spans the viewport and
+   centres the panel as a flex item, which is more reliable than offsetting a
+   fixed-size box - the UA's `inset: 0` plus `margin: auto` cannot centre it.
+   Every rule is scoped to `:modal`, so a not-yet-open dialog stays hidden. */
+.intro:modal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
+  padding: 16px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  overflow: hidden;
+}
+
+.intro::backdrop {
+  background: rgba(8, 9, 11, 0.74);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.intro__panel {
+  width: min(100%, 460px);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-xl);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+.intro__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.intro__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: 1px solid var(--amber-line);
+  border-radius: var(--r-md);
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.intro__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.intro__body {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding-top: 12px;
+}
+
+.intro__text {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+/* The experimental warning is the one thing on screen that must not be
+   skimmed past, so it carries its own amber panel rather than a plain
+   sentence in the body copy. */
+.intro__warning {
+  margin-top: 3px;
+  padding: 10px 11px;
+  border: 1px solid var(--amber-line);
+  border-radius: var(--r-md);
+  background: var(--amber-soft);
+}
+
+.intro__warning-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--amber-bright);
+}
+
+.intro__warning-text {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.intro__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.intro__credit {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--text-3);
+}
+
+/* ============================================================
    Header
    ============================================================ */
 
@@ -2311,6 +2434,26 @@ details[open] > .disclosure__summary::before {
   .panel,
   .result-card {
     padding: 14px;
+  }
+
+  .intro__panel {
+    padding: 14px;
+  }
+
+  /* One full-width target beats a credit line competing with the button for
+     the width on a phone. */
+  .intro__footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .intro__footer .btn {
+    width: 100%;
+  }
+
+  .intro__credit {
+    text-align: center;
   }
 
   .btn {
